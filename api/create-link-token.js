@@ -1,4 +1,5 @@
 const { PlaidApi, PlaidEnvironments, Configuration } = require('plaid');
+const { assertPlaidConfig, setCommonHeaders } = require('./_utils');
 
 const configuration = new Configuration({
   basePath: PlaidEnvironments.sandbox,
@@ -13,10 +14,8 @@ const configuration = new Configuration({
 const plaidClient = new PlaidApi(configuration);
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+  setCommonHeaders(res);
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -26,6 +25,8 @@ module.exports = async (req, res) => {
   }
 
   try {
+    assertPlaidConfig();
+
     const request = {
       user: {
         client_user_id: 'user-' + Date.now(),
@@ -37,14 +38,14 @@ module.exports = async (req, res) => {
     };
 
     const response = await plaidClient.linkTokenCreate(request);
-    
-    res.status(200).json({
+
+    return res.status(200).json({
       link_token: response.data.link_token,
       expiration: response.data.expiration,
     });
   } catch (error) {
     console.error('Error creating link token:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to create link token',
       details: error.response?.data || error.message,
     });

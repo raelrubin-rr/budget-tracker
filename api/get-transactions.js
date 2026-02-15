@@ -1,4 +1,5 @@
 const { PlaidApi, PlaidEnvironments, Configuration } = require('plaid');
+const { assertPlaidConfig, parseJsonBody, setCommonHeaders } = require('./_utils');
 
 const configuration = new Configuration({
   basePath: PlaidEnvironments.sandbox,
@@ -13,10 +14,8 @@ const configuration = new Configuration({
 const plaidClient = new PlaidApi(configuration);
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+  setCommonHeaders(res);
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -26,29 +25,29 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { access_token } = req.body;
-    
+    assertPlaidConfig();
+
+    const { access_token } = parseJsonBody(req);
+
     if (!access_token) {
       return res.status(400).json({ error: 'access_token is required' });
     }
 
     const now = new Date();
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    
-    const request = {
+
+    const response = await plaidClient.transactionsGet({
       access_token,
       start_date: ninetyDaysAgo.toISOString().split('T')[0],
       end_date: now.toISOString().split('T')[0],
-    };
-
-    const response = await plaidClient.transactionsGet(request);
+    });
     const accountsResponse = await plaidClient.accountsGet({ access_token });
     const accounts = accountsResponse.data.accounts;
 
-    const transactions = response.data.transactions.map(tx => {
-      const account = accounts.find(acc => acc.account_id === tx.account_id);
+    const transactions = response.data.transactions.map((tx) => {
+      const account = accounts.find((acc) => acc.account_id === tx.account_id);
       const accountType = account?.type === 'credit' ? 'credit' : 'checking';
-      
+
       return {
         id: tx.transaction_id,
         name: tx.name,
@@ -62,9 +61,9 @@ module.exports = async (req, res) => {
       };
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       transactions,
-      accounts: accounts.map(acc => ({
+      accounts: accounts.map((acc) => ({
         id: acc.account_id,
         name: acc.name,
         type: acc.type,
@@ -74,28 +73,10 @@ module.exports = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching transactions:', error);
-    res.status(500).json({
-      error: 'Failed to fetch transactions',
+    const statusCode = error.message === 'Invalid JSON body' ? 400 : 500;
+    return res.status(statusCode).json({
+      error: statusCode === 400 ? 'Invalid request body' : 'Failed to fetch transactions',
       details: error.response?.data || error.message,
     });
   }
 };
-```
-
-4. Click **"Commit changes"**
-
----
-
-## ✅ **After Adding All 3 Files:**
-
-Your repository should now have:
-```
-├── .gitignore
-├── README.md
-├── index.html
-├── package.json
-├── vercel.json
-└── api/
-    ├── create-link-token.js
-    ├── exchange-token.js
-    └── get-transactions.js

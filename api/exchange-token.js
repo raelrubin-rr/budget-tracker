@@ -1,4 +1,5 @@
 const { PlaidApi, PlaidEnvironments, Configuration } = require('plaid');
+const { assertPlaidConfig, parseJsonBody, setCommonHeaders } = require('./_utils');
 
 const configuration = new Configuration({
   basePath: PlaidEnvironments.sandbox,
@@ -13,10 +14,8 @@ const configuration = new Configuration({
 const plaidClient = new PlaidApi(configuration);
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+  setCommonHeaders(res);
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -26,27 +25,25 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { public_token } = req.body;
-    
+    assertPlaidConfig();
+
+    const { public_token } = parseJsonBody(req);
+
     if (!public_token) {
       return res.status(400).json({ error: 'public_token is required' });
     }
 
-    const response = await plaidClient.itemPublicTokenExchange({
-      public_token,
-    });
+    const response = await plaidClient.itemPublicTokenExchange({ public_token });
 
-    const access_token = response.data.access_token;
-    const item_id = response.data.item_id;
-
-    res.status(200).json({
-      access_token,
-      item_id,
+    return res.status(200).json({
+      access_token: response.data.access_token,
+      item_id: response.data.item_id,
     });
   } catch (error) {
     console.error('Error exchanging token:', error);
-    res.status(500).json({
-      error: 'Failed to exchange token',
+    const statusCode = error.message === 'Invalid JSON body' ? 400 : 500;
+    return res.status(statusCode).json({
+      error: statusCode === 400 ? 'Invalid request body' : 'Failed to exchange token',
       details: error.response?.data || error.message,
     });
   }
