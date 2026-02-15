@@ -48,14 +48,17 @@ module.exports = async (req, res) => {
     const rawTransactions = response.data.transactions.map((tx) => {
       const account = accounts.find((acc) => acc.account_id === tx.account_id);
       const accountType = account?.type === 'credit' ? 'credit' : 'checking';
+      const normalizedAmount = accountType === 'credit' ? -Math.abs(tx.amount) : -tx.amount;
 
       return {
         id: tx.transaction_id,
+        accountId: tx.account_id,
         name: tx.name,
-        amount: accountType === 'credit' ? -Math.abs(tx.amount) : tx.amount,
+        amount: normalizedAmount,
         date: tx.date,
         pending: tx.pending,
         account: accountType,
+        includeInBudget: accountType === 'checking' ? false : true,
         category: tx.category ? tx.category[0].toLowerCase() : 'other',
         merchant_name: tx.merchant_name,
         personal_finance_category: tx.personal_finance_category,

@@ -51,7 +51,7 @@
 
         header {
             padding: 40px 0 60px;
-            border-bottom: 2px solid var(--border-color);
+            border-bottom: none;
         }
 
         h1 {
@@ -100,7 +100,7 @@
         .card {
             background: var(--bg-secondary);
             border: 2px solid var(--border-color);
-            border-radius: 16px;
+            border-radius: 22px;
             padding: 36px;
             margin-bottom: 24px;
             width: 100%;
@@ -191,7 +191,7 @@
 
         /* Progress Bar */
         .progress-section {
-            margin: 40px 0;
+            margin: 28px 0 20px;
         }
 
         .progress-label-top {
@@ -208,7 +208,7 @@
 
         .progress-bar {
             width: 100%;
-            height: 32px;
+            height: 42px;
             background: var(--bg-tertiary);
             border-radius: 16px;
             overflow: hidden;
@@ -283,6 +283,96 @@
             height: 330px;
         }
 
+
+        .accounts-widget {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+
+        .accounts-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 12px;
+            gap: 12px;
+        }
+
+        .accounts-title {
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .accounts-link {
+            color: var(--blue);
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .accounts-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+        }
+
+        .accounts-panel {
+            padding: 8px 16px 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .accounts-panel + .accounts-panel {
+            border-left: 2px solid var(--border-color);
+        }
+
+        .accounts-table-wrap {
+            flex: 1;
+        }
+
+        .accounts-total {
+            margin-top: 10px;
+            padding: 10px 8px 0;
+            border-top: 2px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .accounts-section-title {
+            margin: 10px 0;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .accounts-table { width: 100%; border-collapse: collapse; }
+        .accounts-table th, .accounts-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 13px; }
+        .accounts-table th:first-child, .accounts-table td:first-child { text-align: left; }
+        .accounts-table th:nth-child(2), .accounts-table td:nth-child(2),
+        .accounts-table th:nth-child(3), .accounts-table td:nth-child(3) { text-align: right; }
+        .accounts-table tbody tr:last-child td { border-bottom: none; }
+        .account-subtype { color: var(--text-tertiary); font-size: 11px; margin-left: 6px; }
+        .account-meta { color: var(--text-tertiary); font-size: 10px; margin-top: 3px; }
+        .rename-account-btn {
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 999px;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-left: 8px;
+            line-height: 1;
+        }
+        .rename-account-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+        
         /* Transactions */
         .transaction-section {
             background: var(--bg-secondary);
@@ -299,6 +389,7 @@
 
         .transactions-grid {
             display: grid;
+            margin-top: 6px;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
             align-items: stretch;
@@ -312,6 +403,11 @@
             align-items: center;
             cursor: pointer;
             user-select: none;
+        }
+
+        .transactions-master-header {
+            border-bottom: none;
+            padding-bottom: 12px;
         }
 
         .section-title {
@@ -510,6 +606,29 @@
         .inline-action:hover {
             color: var(--text-primary);
             border-color: var(--text-secondary);
+        }
+
+        .include-plus-btn {
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 8px;
+        }
+
+        .include-plus-btn.active {
+            background: var(--green);
+            color: #062015;
+            border-color: var(--green);
         }
 
         .expense-item:hover .edit-icon {
@@ -888,31 +1007,19 @@
                     <div class="progress-text" id="budgetProgressText">$0 of $0</div>
                 </div>
             </div>
-        </div>
 
-        <div class="charts-grid">
-            <div class="chart-card">
-                <div class="chart-title">Monthly Spending Comparison</div>
-                <div class="chart-container">
-                    <canvas id="trendChart"></canvas>
-                </div>
+
+            <div class="section-header transactions-master-header" onclick="toggleSection('allTransactionsContent', 'allTransactionsToggle')">
+                <div class="section-title">Transactions</div>
+                <span class="toggle-icon" id="allTransactionsToggle">▼</span>
             </div>
-
-            <div class="chart-card">
-                <div class="chart-title">Category Breakdown</div>
-                <div class="chart-container pie">
-                    <canvas id="categoryChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="transactions-grid">
+            <div class="section-content" id="allTransactionsContent">
+            <div class="transactions-grid">
             <div class="transaction-section">
-                <div class="section-header" onclick="toggleSection('creditContent', 'creditToggle')">
-                    <div class="section-title">💳 Credit Card</div>
-                    <span class="toggle-icon" id="creditToggle">▼</span>
+                <div class="section-header">
+                    <div class="section-title">Credit Card</div>
                 </div>
-                <div class="section-content" id="creditContent">
+                <div class="section-content">
                     <div class="filter-bar">
                         <input type="text" class="search-input" id="creditSearch" placeholder="Search transactions..." onkeyup="filterTransactions('credit')">
                         <select class="filter-select" id="creditCategoryFilter" onchange="filterTransactions('credit')">
@@ -931,11 +1038,10 @@
             </div>
 
             <div class="transaction-section">
-                <div class="section-header" onclick="toggleSection('checkingContent', 'checkingToggle')">
-                    <div class="section-title">🏦 Checking</div>
-                    <span class="toggle-icon" id="checkingToggle">▼</span>
+                <div class="section-header">
+                    <div class="section-title">Checking</div>
                 </div>
-                <div class="section-content" id="checkingContent">
+                <div class="section-content">
                     <div class="filter-bar">
                         <input type="text" class="search-input" id="checkingSearch" placeholder="Search transactions..." onkeyup="filterTransactions('checking')">
                         <select class="filter-select" id="checkingTypeFilter" onchange="filterTransactions('checking')">
@@ -949,6 +1055,43 @@
                         </select>
                     </div>
                     <div class="transaction-list" id="checkingList"></div>
+                </div>
+            </div>
+        </div>
+            </div>
+        </div>
+
+        <div class="accounts-widget">
+            <div class="accounts-header">
+                <div class="accounts-title">Assets & Liabilities</div>
+                <a href="#" class="accounts-link" onclick="connectPlaid(); return false;">Link external accounts</a>
+            </div>
+
+            <div class="accounts-columns">
+                <div class="accounts-panel">
+                    <div class="accounts-section-title">Assets</div>
+                    <div class="accounts-table-wrap">
+                        <table class="accounts-table">
+                            <thead>
+                                <tr><th>Account</th><th>Performance YTD</th><th>Current Value</th></tr>
+                            </thead>
+                            <tbody id="assetsTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="accounts-total"><span>Total</span><span id="totalAssetsValue">$0</span></div>
+                </div>
+
+                <div class="accounts-panel">
+                    <div class="accounts-section-title">Liabilities</div>
+                    <div class="accounts-table-wrap">
+                        <table class="accounts-table">
+                            <thead>
+                                <tr><th>Account</th><th>Paid Off YTD</th><th>Current Value</th></tr>
+                            </thead>
+                            <tbody id="liabilitiesTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="accounts-total"><span>Total</span><span id="totalLiabilitiesValue">$0</span></div>
                 </div>
             </div>
         </div>
@@ -1053,7 +1196,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
-        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], connectedAccount: null, billingHistory: [] };
+        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], lastAccountsUpdatedAt: null };
         let editingFixedExpenseIndex = null;
         let currentReimbursableIndex = null;
         let trendChart = null;
@@ -1242,6 +1385,7 @@
         }
 
         function normalizeTransactionCategory(tx) {
+            if (tx.account === 'checking' && typeof tx.includeInBudget !== 'boolean') tx.includeInBudget = false;
             const category = tx.category || autoCategorize(tx.name);
             tx.category = category;
             tx.categoryLabel = tx.categoryLabel || getCategoryLabel(category);
@@ -1294,39 +1438,44 @@
         function loadDemoData(preserveSettings = false) {
             const demoState = {
                 income: 6500, savings: 1000, budgetStartDay: 4, billingHistory: state.billingHistory || [],
+                accounts: [
+                    { id: 'demo-checking', name: 'Everyday Checking', type: 'depository', subtype: 'checking', balance: 8420, custodian: 'Chase', lastUpdatedAt: new Date().toISOString() },
+                    { id: 'demo-savings', name: 'Emergency Savings', type: 'depository', subtype: 'savings', balance: 18600, custodian: 'Chase', lastUpdatedAt: new Date().toISOString() },
+                    { id: 'demo-credit', name: 'Freedom Unlimited', type: 'credit', subtype: 'credit card', balance: 1430, custodian: 'Chase', lastUpdatedAt: new Date().toISOString() }
+                ],
                 fixedExpenses: [
                     { name: 'Rent', amount: 2200 }, { name: 'Car Payment', amount: 450 },
                     { name: 'Insurance', amount: 180 }, { name: 'Utilities', amount: 120 }, { name: 'Subscriptions', amount: 85 }
                 ],
                 transactions: [
-                    { name: 'Paycheck Deposit', amount: 3250, date: '2026-02-14', pending: false, account: 'checking', category: 'other' },
-                    { name: 'Paycheck Deposit', amount: 3250, date: '2026-01-31', pending: false, account: 'checking', category: 'other' },
-                    { name: 'Venmo from Sarah', amount: 45, date: '2026-02-12', pending: false, account: 'checking', category: 'other' },
-                    { name: 'Venmo from Mike', amount: 39, date: '2026-02-12', pending: false, account: 'checking', category: 'other' },
-                    { name: 'Venmo from Jessica', amount: 62, date: '2026-02-09', pending: false, account: 'checking', category: 'other' },
-                    { name: 'Whole Foods', amount: -87, date: '2026-02-13', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
-                    { name: 'Shell Gas Station', amount: -52, date: '2026-02-12', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
-                    { name: 'Target', amount: -125, date: '2026-02-11', pending: true, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'shopping' },
-                    { name: 'Dinner at Mastros', amount: -187, date: '2026-02-10', pending: false, account: 'credit', reimbursable: 84, linkedDeposit: 3, category: 'dining' },
-                    { name: 'Starbucks', amount: -7, date: '2026-02-10', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
-                    { name: 'Uber Eats', amount: -38, date: '2026-02-09', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
-                    { name: 'Amazon Prime', amount: -15, date: '2026-02-09', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Movie Tickets AMC', amount: -44, date: '2026-02-08', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'entertainment' },
-                    { name: 'Chipotle', amount: -14, date: '2026-02-08', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
-                    { name: 'Drinks at Bar 54', amount: -89, date: '2026-02-07', pending: false, account: 'credit', reimbursable: 62, linkedDeposit: 4, category: 'dining' },
-                    { name: 'Trader Joes', amount: -68, date: '2026-02-06', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
-                    { name: 'CVS Pharmacy', amount: -23, date: '2026-02-05', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'other' },
-                    { name: 'Spotify Premium', amount: -11, date: '2026-02-04', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Whole Foods', amount: -92, date: '2026-01-27', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
-                    { name: 'Shell Gas Station', amount: -48, date: '2026-01-24', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
-                    { name: 'Dinner at Nobu', amount: -156, date: '2026-01-20', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
-                    { name: 'Target', amount: -89, date: '2026-01-18', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'shopping' },
-                    { name: 'Netflix', amount: -16, date: '2026-01-14', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Amazon Prime', amount: -15, date: '2026-01-09', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Spotify Premium', amount: -11, date: '2026-01-04', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Whole Foods', amount: -78, date: '2025-12-28', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
-                    { name: 'Shell Gas Station', amount: -55, date: '2025-12-22', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
-                    { name: 'Netflix', amount: -16, date: '2025-12-14', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' }
+                    { name: 'Paycheck Deposit', amount: 3250, date: '2026-02-14', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
+                    { name: 'Paycheck Deposit', amount: 3250, date: '2026-01-31', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
+                    { name: 'Venmo from Sarah', amount: 45, date: '2026-02-12', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
+                    { name: 'Venmo from Mike', amount: 39, date: '2026-02-12', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
+                    { name: 'Venmo from Jessica', amount: 62, date: '2026-02-09', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
+                    { name: 'Whole Foods', amount: -87, date: '2026-02-13', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
+                    { name: 'Shell Gas Station', amount: -52, date: '2026-02-12', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
+                    { name: 'Target', amount: -125, date: '2026-02-11', pending: true, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'shopping' },
+                    { name: 'Dinner at Mastros', amount: -187, date: '2026-02-10', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 84, linkedDeposit: 3, category: 'dining' },
+                    { name: 'Starbucks', amount: -7, date: '2026-02-10', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
+                    { name: 'Uber Eats', amount: -38, date: '2026-02-09', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
+                    { name: 'Amazon Prime', amount: -15, date: '2026-02-09', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Movie Tickets AMC', amount: -44, date: '2026-02-08', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'entertainment' },
+                    { name: 'Chipotle', amount: -14, date: '2026-02-08', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
+                    { name: 'Drinks at Bar 54', amount: -89, date: '2026-02-07', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 62, linkedDeposit: 4, category: 'dining' },
+                    { name: 'Trader Joes', amount: -68, date: '2026-02-06', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
+                    { name: 'CVS Pharmacy', amount: -23, date: '2026-02-05', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'other' },
+                    { name: 'Spotify Premium', amount: -11, date: '2026-02-04', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Whole Foods', amount: -92, date: '2026-01-27', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
+                    { name: 'Shell Gas Station', amount: -48, date: '2026-01-24', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
+                    { name: 'Dinner at Nobu', amount: -156, date: '2026-01-20', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
+                    { name: 'Target', amount: -89, date: '2026-01-18', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'shopping' },
+                    { name: 'Netflix', amount: -16, date: '2026-01-14', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Amazon Prime', amount: -15, date: '2026-01-09', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Spotify Premium', amount: -11, date: '2026-01-04', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Whole Foods', amount: -78, date: '2025-12-28', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
+                    { name: 'Shell Gas Station', amount: -55, date: '2025-12-22', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
+                    { name: 'Netflix', amount: -16, date: '2025-12-14', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' }
                 ]
             };
 
@@ -1340,6 +1489,7 @@
                     billingHistory: state.billingHistory || demoState.billingHistory || [],
                 }
                 : demoState;
+            state.lastAccountsUpdatedAt = new Date().toISOString();
 
             updateUI();
         }
@@ -1367,6 +1517,8 @@
 
         function getDaysRemaining() {
             const today = new Date();
+            const todayStart = new Date(today);
+            todayStart.setHours(0, 0, 0, 0);
             const currentMonth = today.getMonth();
             const currentYear = today.getFullYear();
             const startDay = state.budgetStartDay || 4;
@@ -1377,16 +1529,18 @@
                 endDate = new Date(currentYear, currentMonth, startDay);
             }
             const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-            let currentDate = new Date(today);
+            let currentDate = new Date(todayStart);
             const weekendPeriods = new Set();
 
-            while (currentDate <= endDate) {
+            while (currentDate < endDate) {
                 const day = currentDate.getDay();
                 if (day === 0 || day === 6) {
                     const weekendAnchor = new Date(currentDate);
                     if (day === 0) weekendAnchor.setDate(weekendAnchor.getDate() - 1);
                     weekendAnchor.setHours(0, 0, 0, 0);
-                    weekendPeriods.add(weekendAnchor.toDateString());
+                    if (weekendAnchor > todayStart) {
+                        weekendPeriods.add(weekendAnchor.toDateString());
+                    }
                 }
                 currentDate.setDate(currentDate.getDate() + 1);
             }
@@ -1705,11 +1859,12 @@
             setTextIfPresent('daysRemaining', `${getBudgetPeriod()} • ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`);
             
             const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
-            const postedSpent = Math.round(state.transactions
-                .filter(t => t.amount < 0 && !t.pending)
+            const budgetTransactions = state.transactions.filter(t => t.amount < 0 && (t.account !== 'checking' || t.includeInBudget));
+            const postedSpent = Math.round(budgetTransactions
+                .filter(t => !t.pending)
                 .reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0));
-            const pendingSpent = Math.round(state.transactions
-                .filter(t => t.amount < 0 && t.pending)
+            const pendingSpent = Math.round(budgetTransactions
+                .filter(t => t.pending)
                 .reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0));
             const variableSpent = postedSpent + pendingSpent;
             const available = state.income - totalFixed - state.savings - variableSpent;
@@ -1752,8 +1907,73 @@
             }
             
             updateTransactions();
-            updateTrendChart();
-            updateCategoryChart();
+            renderAccountsWidget();
+        }
+
+        function isLiabilityAccount(acc) {
+            return ['credit', 'loan', 'liability'].includes((acc.type || '').toLowerCase());
+        }
+
+        function renderAccountsWidget() {
+            const assetsBody = document.getElementById('assetsTableBody');
+            const liabilitiesBody = document.getElementById('liabilitiesTableBody');
+            if (!assetsBody || !liabilitiesBody) return;
+            const accounts = state.accounts || [];
+
+            const assetAccounts = accounts
+                .filter(acc => !isLiabilityAccount(acc))
+                .sort((a, b) => Math.abs(Number(b.balance || 0)) - Math.abs(Number(a.balance || 0)));
+            const liabilityAccounts = accounts
+                .filter(acc => isLiabilityAccount(acc))
+                .sort((a, b) => Math.abs(Number(b.balance || 0)) - Math.abs(Number(a.balance || 0)));
+
+            const currentYear = new Date().getFullYear();
+            let totalAssets = 0;
+            let totalLiabilities = 0;
+
+            const buildRows = (list, kind) => {
+                if (!list.length) return `<tr><td colspan="3" class="empty-state">No linked ${kind} accounts yet.</td></tr>`;
+                return list.map(acc => {
+                    const value = Number(acc.balance || 0);
+                    const accountTx = state.transactions.filter(tx => tx.accountId === acc.id && new Date(tx.date).getFullYear() === currentYear);
+                    const ytdRaw = kind === 'liability'
+                        ? accountTx.reduce((sum, tx) => sum + Math.max(0, tx.amount || 0), 0)
+                        : accountTx.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+                    const denominator = Math.abs(value) > 0 ? Math.abs(value) : 1;
+                    const ytdPct = ((ytdRaw / denominator) * 100).toFixed(1);
+                    const lastUpdated = acc.lastUpdatedAt || state.lastAccountsUpdatedAt;
+                    const lastUpdatedLabel = lastUpdated
+                        ? new Date(lastUpdated).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                        : '--';
+
+                    if (kind === 'asset') totalAssets += Math.max(value, 0);
+                    else totalLiabilities += Math.abs(value);
+
+                    return `<tr>
+                        <td>
+                            ${acc.name}<span class="account-subtype">${acc.custodian || 'Linked institution'}</span>
+                            <button class="rename-account-btn" onclick="renameAccount('${acc.id}')" title="Rename account">✎</button>
+                            <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
+                        </td>
+                        <td style="color:${ytdRaw >= 0 ? 'var(--green)' : 'var(--red)'}">${ytdPct}% (${ytdRaw >= 0 ? '+' : '-'}$${Math.round(Math.abs(ytdRaw)).toLocaleString()})</td>
+                        <td>${kind === 'liability' ? `($${Math.round(Math.abs(value)).toLocaleString()})` : `$${Math.round(Math.abs(value)).toLocaleString()}`}</td>
+                    </tr>`;
+                }).join('');
+            };
+
+            assetsBody.innerHTML = buildRows(assetAccounts, 'asset');
+            liabilitiesBody.innerHTML = buildRows(liabilityAccounts, 'liability');
+            setTextIfPresent('totalAssetsValue', `$${Math.round(totalAssets).toLocaleString()}`);
+            setTextIfPresent('totalLiabilitiesValue', `($${Math.round(totalLiabilities).toLocaleString()})`);
+        }
+
+        function renameAccount(accountId) {
+            const account = (state.accounts || []).find(acc => acc.id === accountId);
+            if (!account) return;
+            const nextName = prompt('Rename account', account.name);
+            if (!nextName) return;
+            account.name = nextName.trim() || account.name;
+            updateUI();
         }
 
         function updateTransactions() {
@@ -1857,7 +2077,7 @@
                                     ${tx.name}
                                     ${linkedIcon}
                                     ${pendingBadge}
-                                    ${account === 'credit' ? '<span class="edit-icon">✎</span>' : ''}
+                                    ${account === 'credit' ? '<span class="edit-icon">✎</span>' : ''}${account === 'checking' && tx.amount < 0 ? `<button class="include-plus-btn ${tx.includeInBudget ? 'active' : ''}" title="Include in period expenses" onclick="event.stopPropagation(); toggleCheckingBudgetInclusion(${actualIndex})">+</button>` : ''}
                                 </span>
                                 <span class="transaction-date">${transactionDate}</span>
                             </span>
@@ -1866,6 +2086,13 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        function toggleCheckingBudgetInclusion(index) {
+            const tx = state.transactions[index];
+            if (!tx || tx.account !== 'checking' || tx.amount >= 0) return;
+            tx.includeInBudget = !tx.includeInBudget;
+            updateUI();
         }
 
         function filterTransactions(account) {
@@ -2106,6 +2333,9 @@
                 }
                 
                 state.transactions = (data.transactions || []).map(normalizeTransactionCategory);
+                const institution = localStorage.getItem('plaid_institution') || 'Linked institution';
+                state.accounts = (data.accounts || []).map(acc => ({ ...acc, custodian: institution, lastUpdatedAt: new Date().toISOString() }));
+                state.lastAccountsUpdatedAt = new Date().toISOString();
 
                 updateUI();
             } catch (error) {
