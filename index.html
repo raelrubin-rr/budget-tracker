@@ -42,7 +42,8 @@
         }
 
         .container {
-            max-width: 1200px;
+            width: 100%;
+            max-width: 100%;
             margin: 0 auto;
             padding: 40px 20px;
         }
@@ -101,6 +102,7 @@
             border-radius: 16px;
             padding: 36px;
             margin-bottom: 24px;
+            width: 100%;
         }
 
         .date-info {
@@ -258,6 +260,8 @@
             border-radius: 12px;
             padding: 24px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            min-width: 0;
         }
 
         .chart-title {
@@ -287,6 +291,8 @@
             display: flex;
             flex-direction: column;
             height: 640px;
+            width: 100%;
+            min-width: 0;
         }
 
         .transactions-grid {
@@ -465,7 +471,7 @@
         }
 
         .pending-badge {
-            background: var(--orange);
+            background: #fdba74;
             color: var(--bg-primary);
             font-size: 11px;
             padding: 4px 10px;
@@ -1089,8 +1095,8 @@
                 if (!total) return;
 
                 const { ctx } = chart;
-                const minimumPctForLabel = 8;
-                const sideOffset = 32;
+                const minimumPctForLabel = 5;
+                const sideOffset = 42;
                 const minimumSpacing = 26;
                 const topBound = chart.chartArea.top + 16;
                 const bottomBound = chart.chartArea.bottom - 16;
@@ -1472,7 +1478,7 @@
                         const chartBottom = chart.chartArea.bottom - 8;
                         const direction = value >= 0 ? -1 : 1;
 
-                        let x = bar.x + (datasetIndex === 0 ? -7 : 7);
+                        let x = bar.x + (datasetIndex === 0 ? -18 : 7);
                         let y = value >= 0 ? Math.max(chartTop, bar.y - 8) : Math.min(chartBottom, bar.y + 12);
 
                         for (let guard = 0; guard < 8; guard++) {
@@ -1633,7 +1639,17 @@
                     },
                     plugins: {
                         legend: {
-                            display: false
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                color: '#b0b0b0',
+                                font: { size: 11, weight: '600' },
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                boxWidth: 10,
+                                boxHeight: 10,
+                                padding: 14
+                            }
                         },
                         tooltip: {
                             backgroundColor: '#1f1f1f',
@@ -1651,8 +1667,7 @@
                             }
                         }
                     }
-                },
-                plugins: [donutCategoryLabelPlugin]
+                }
             });
         }
 
@@ -1684,7 +1699,7 @@
             
             const weekendBudget = weekendsLeft > 0 ? Math.round(available / weekendsLeft) : 0;
             setTextIfPresent('weekendBudget', `$${weekendBudget.toLocaleString()}`);
-            setTextIfPresent('weekendText', `per ${weekendsLeft} ${weekendsLeft === 1 ? 'weekend' : 'weekends'} remaining (${weekendsLeft} left)`);
+            setTextIfPresent('weekendText', `${weekendsLeft} ${weekendsLeft === 1 ? 'weekend' : 'weekends'} remaining`);
             
             const progressBar = document.getElementById('budgetProgress');
             if (progressBar) {
@@ -1793,10 +1808,8 @@
                 const isPositive = tx.amount > 0;
                 const isLinked = state.transactions.some(t => t.linkedDeposit === actualIndex);
                 const linkedDeposit = tx.linkedDeposit !== null && tx.linkedDeposit !== undefined ? state.transactions[tx.linkedDeposit] : null;
-                const isRecurring = recurringNames.has(tx.name);
                 const hasReimbursement = tx.reimbursable && tx.reimbursable > 0;
                 
-                const recurringIcon = isRecurring ? '<span class="badge">🔁</span>' : '';
                 const linkedIcon = (linkedDeposit || isLinked) ? '<span class="badge">🔗</span>' : '';
                 const pendingBadge = tx.pending ? '<span class="pending-badge">Pending</span>' : '';
                 const categoryEmoji = getTransactionEmoji(tx);
@@ -1821,7 +1834,6 @@
                             <span class="transaction-details">
                                 <span class="transaction-title">
                                     ${tx.name}
-                                    ${recurringIcon}
                                     ${linkedIcon}
                                     ${pendingBadge}
                                     ${account === 'credit' ? '<span class="edit-icon">✎</span>' : ''}
