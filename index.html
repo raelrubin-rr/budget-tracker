@@ -9,10 +9,11 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
-        * {
+        *, *::before, *::after {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         :root {
@@ -54,11 +55,11 @@
         }
 
         h1 {
-            font-size: 52px;
+            font-size: 44px;
             font-weight: 800;
             letter-spacing: -0.03em;
             color: var(--text-primary);
-            margin-bottom: 12px;
+            margin-bottom: 0;
         }
 
         .period {
@@ -607,12 +608,14 @@
         }
 
         .editable-value {
+            display: inline-block;
             border-bottom: 1px solid transparent;
             transition: border-color 0.2s, color 0.2s;
+            line-height: 1.2;
         }
 
         .setting-item.editable:hover .editable-value {
-            border-bottom-color: var(--text-secondary);
+            border-bottom-color: currentColor;
             color: var(--text-primary);
         }
 
@@ -768,7 +771,7 @@
 
         @media (max-width: 768px) {
             h1 {
-                font-size: 42px;
+                font-size: 36px;
             }
             .budget-grid {
                 grid-template-columns: 1fr;
@@ -850,13 +853,12 @@
     <div class="container">
         <header>
             <h1>Budget</h1>
-            <div class="period" id="budgetPeriod">Jan 4 – Feb 4, 2026</div>
         </header>
 
         <div class="card">
             <div class="date-info">
                 <div class="current-date" id="currentDate">Saturday, Feb 14, 2026</div>
-                <div class="days-remaining" id="daysRemaining">18 days • 2 weekends • Jan 4 – Feb 4</div>
+                <div class="days-remaining" id="daysRemaining">Jan 4 – Feb 4 • 18 days remaining</div>
             </div>
 
             <div class="budget-surface">
@@ -1692,7 +1694,7 @@
             setTextIfPresent('currentDate', getCurrentDate());
             
             const { daysLeft, weekendsLeft } = getDaysRemaining();
-            setTextIfPresent('daysRemaining', `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} • ${weekendsLeft} ${weekendsLeft === 1 ? 'weekend' : 'weekends'} • ${getBudgetPeriod()}`);
+            setTextIfPresent('daysRemaining', `${getBudgetPeriod()} • ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`);
             
             const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
             const postedSpent = Math.round(state.transactions
