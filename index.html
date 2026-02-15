@@ -1194,11 +1194,26 @@
         </div>
     </div>
 
+    <div class="modal" id="renameAccountModal">
+        <div class="modal-content">
+            <div class="modal-header">Rename Account</div>
+            <div class="form-group">
+                <label class="form-label">Account Name</label>
+                <input type="text" class="form-input" id="renameAccountInput" placeholder="Account name">
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="closeModal('renameAccountModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveAccountRename()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], lastAccountsUpdatedAt: null };
         let editingFixedExpenseIndex = null;
         let currentReimbursableIndex = null;
+        let currentRenameAccountId = null;
         let trendChart = null;
         let categoryChart = null;
 
@@ -1952,7 +1967,7 @@
                     return `<tr>
                         <td>
                             ${acc.name}<span class="account-subtype">${acc.custodian || 'Linked institution'}</span>
-                            <button class="rename-account-btn" onclick="renameAccount('${acc.id}')" title="Rename account">✎</button>
+                            <button class="rename-account-btn" onclick="openRenameAccountModal('${acc.id}')" title="Rename account">✎</button>
                             <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
                         </td>
                         <td style="color:${ytdRaw >= 0 ? 'var(--green)' : 'var(--red)'}">${ytdPct}% (${ytdRaw >= 0 ? '+' : '-'}$${Math.round(Math.abs(ytdRaw)).toLocaleString()})</td>
@@ -1967,13 +1982,13 @@
             setTextIfPresent('totalLiabilitiesValue', `($${Math.round(totalLiabilities).toLocaleString()})`);
         }
 
-        function renameAccount(accountId) {
+        function openRenameAccountModal(accountId) {
             const account = (state.accounts || []).find(acc => acc.id === accountId);
             if (!account) return;
-            const nextName = prompt('Rename account', account.name);
-            if (!nextName) return;
-            account.name = nextName.trim() || account.name;
-            updateUI();
+            currentRenameAccountId = accountId;
+            document.getElementById('renameAccountInput').value = account.name || '';
+            document.getElementById('renameAccountModal').classList.add('active');
+            if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
         }
 
         function updateTransactions() {
@@ -2179,6 +2194,7 @@
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
             if (modalId === 'fixedModal') editingFixedExpenseIndex = null;
+            if (modalId === 'renameAccountModal') currentRenameAccountId = null;
         }
         function saveIncome() { const value = parseFloat(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); closeModal('incomeModal'); } }
         function saveSavings() { const value = parseFloat(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); closeModal('savingsModal'); } }
@@ -2219,6 +2235,17 @@
                 closeModal('reimbursableModal');
                 currentReimbursableIndex = null;
             }
+        }
+
+        function saveAccountRename() {
+            if (!currentRenameAccountId) return;
+            const account = (state.accounts || []).find(acc => acc.id === currentRenameAccountId);
+            if (!account) return;
+            const nextName = document.getElementById('renameAccountInput').value.trim();
+            if (!nextName) return;
+            account.name = nextName;
+            updateUI();
+            closeModal('renameAccountModal');
         }
 
         function toggleSidebar() {

@@ -14,6 +14,35 @@ const configuration = new Configuration({
 
 const plaidClient = new PlaidApi(configuration);
 
+function getPlaidErrorCode(error) {
+  return error?.response?.data?.error_code || null;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchTransactionsWithRetry(access_token, start_date, end_date) {
+  const maxAttempts = 4;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await plaidClient.transactionsGet({ access_token, start_date, end_date });
+    } catch (error) {
+      const plaidErrorCode = getPlaidErrorCode(error);
+      const shouldRetry = plaidErrorCode === 'PRODUCT_NOT_READY' || plaidErrorCode === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION';
+
+      if (!shouldRetry || attempt === maxAttempts) {
+        throw error;
+      }
+
+      await wait(500 * attempt);
+    }
+  }
+
+  throw new Error('Unable to fetch transactions');
+}
+
 module.exports = async (req, res) => {
   setCommonHeaders(res);
 
@@ -37,11 +66,10 @@ module.exports = async (req, res) => {
     const now = new Date();
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-    const response = await plaidClient.transactionsGet({
-      access_token,
-      start_date: ninetyDaysAgo.toISOString().split('T')[0],
-      end_date: now.toISOString().split('T')[0],
-    });
+    const start_date = ninetyDaysAgo.toISOString().split('T')[0];
+    const end_date = now.toISOString().split('T')[0];
+
+    const response = await fetchTransactionsWithRetry(access_token, start_date, end_date);
     const accountsResponse = await plaidClient.accountsGet({ access_token });
     const accounts = accountsResponse.data.accounts;
 
