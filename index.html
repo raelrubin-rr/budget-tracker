@@ -54,7 +54,7 @@
         }
 
         h1 {
-            font-size: 64px;
+            font-size: 52px;
             font-weight: 800;
             letter-spacing: -0.03em;
             color: var(--text-primary);
@@ -582,6 +582,14 @@
             cursor: pointer;
         }
 
+        .setting-item.editable {
+            transition: background 0.2s;
+        }
+
+        .setting-item.editable:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
         .setting-label {
             font-size: 16px;
             color: var(--text-secondary);
@@ -594,6 +602,20 @@
             font-weight: 800;
         }
 
+        .setting-value-wrap {
+            margin-left: auto;
+        }
+
+        .editable-value {
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s, color 0.2s;
+        }
+
+        .setting-item.editable:hover .editable-value {
+            border-bottom-color: var(--text-secondary);
+            color: var(--text-primary);
+        }
+
         .fixed-expense-meta {
             margin-left: auto;
             display: flex;
@@ -604,17 +626,6 @@
         .fixed-expense-value {
             min-width: 110px;
             text-align: right;
-        }
-
-        .fixed-expense-clickable {
-            cursor: pointer;
-            border-bottom: 1px dashed transparent;
-            transition: border-color 0.2s, color 0.2s;
-        }
-
-        .fixed-expense-clickable:hover {
-            color: var(--text-primary);
-            border-color: var(--text-secondary);
         }
 
         .setting-item.connected .setting-value {
@@ -757,7 +768,7 @@
 
         @media (max-width: 768px) {
             h1 {
-                font-size: 48px;
+                font-size: 42px;
             }
             .budget-grid {
                 grid-template-columns: 1fr;
@@ -800,17 +811,17 @@
         <div class="sidebar-content">
             <div class="sidebar-section">
                 <div class="sidebar-section-title">Budget</div>
-                <div class="setting-item" onclick="openIncomeModal()">
+                <div class="setting-item editable" onclick="openIncomeModal()" title="Click to edit monthly income">
                     <span class="setting-label">Monthly Income</span>
-                    <span class="setting-value" id="sidebarIncome">$0</span>
+                    <span class="setting-value setting-value-wrap editable-value" id="sidebarIncome">$0</span>
                 </div>
-                <div class="setting-item" onclick="openSavingsModal()">
+                <div class="setting-item editable" onclick="openSavingsModal()" title="Click to edit savings goal">
                     <span class="setting-label">Savings Goal</span>
-                    <span class="setting-value" id="sidebarSavings">$0</span>
+                    <span class="setting-value setting-value-wrap editable-value" id="sidebarSavings">$0</span>
                 </div>
-                <div class="setting-item" onclick="openBudgetPeriodModal()">
+                <div class="setting-item editable" onclick="openBudgetPeriodModal()" title="Click to edit period start">
                     <span class="setting-label">Period Start</span>
-                    <span class="setting-value" id="sidebarPeriod">4th</span>
+                    <span class="setting-value setting-value-wrap editable-value" id="sidebarPeriod">4th</span>
                 </div>
             </div>
 
@@ -845,7 +856,7 @@
         <div class="card">
             <div class="date-info">
                 <div class="current-date" id="currentDate">Saturday, Feb 14, 2026</div>
-                <div class="days-remaining" id="daysRemaining">18 days • 2 weekends</div>
+                <div class="days-remaining" id="daysRemaining">18 days • 2 weekends • Jan 4 – Feb 4</div>
             </div>
 
             <div class="budget-surface">
@@ -1478,7 +1489,7 @@
                         const chartBottom = chart.chartArea.bottom - 8;
                         const direction = value >= 0 ? -1 : 1;
 
-                        let x = bar.x + (datasetIndex === 0 ? -18 : 7);
+                        let x = bar.x + (datasetIndex === 0 ? -18 : 18);
                         let y = value >= 0 ? Math.max(chartTop, bar.y - 8) : Math.min(chartBottom, bar.y + 12);
 
                         for (let guard = 0; guard < 8; guard++) {
@@ -1681,7 +1692,7 @@
             setTextIfPresent('currentDate', getCurrentDate());
             
             const { daysLeft, weekendsLeft } = getDaysRemaining();
-            setTextIfPresent('daysRemaining', `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} • ${weekendsLeft} ${weekendsLeft === 1 ? 'weekend' : 'weekends'}`);
+            setTextIfPresent('daysRemaining', `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} • ${weekendsLeft} ${weekendsLeft === 1 ? 'weekend' : 'weekends'} • ${getBudgetPeriod()}`);
             
             const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
             const postedSpent = Math.round(state.transactions
@@ -1719,10 +1730,10 @@
             const sidebarFixedList = document.getElementById('sidebarFixedList');
             if (state.fixedExpenses.length > 0) {
                 sidebarFixedList.innerHTML = state.fixedExpenses.map((exp, index) => `
-                    <div class="setting-item">
+                    <div class="setting-item editable" onclick="openFixedModal(${index})" title="Click to edit fixed expense">
                         <span class="setting-label">${exp.name}</span>
                         <div class="fixed-expense-meta">
-                            <span class="setting-value fixed-expense-value fixed-expense-clickable" onclick="event.stopPropagation(); openFixedModal(${index})">$${Math.round(exp.amount).toLocaleString()}</span>
+                            <span class="setting-value fixed-expense-value editable-value">$${Math.round(exp.amount).toLocaleString()}</span>
                         </div>
                     </div>
                 `).join('');
