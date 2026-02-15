@@ -270,11 +270,11 @@
 
         .chart-container {
             position: relative;
-            height: 300px;
+            height: 320px;
         }
 
         .chart-container.pie {
-            height: 280px;
+            height: 320px;
         }
 
         /* Transactions */
@@ -1094,6 +1094,8 @@
                 const minimumSpacing = 26;
                 const topBound = chart.chartArea.top + 16;
                 const bottomBound = chart.chartArea.bottom - 16;
+                const canvasMinX = 14;
+                const canvasMaxX = chart.width - 14;
 
                 ctx.save();
                 ctx.font = '600 11px Inter, sans-serif';
@@ -1118,10 +1120,13 @@
 
                     const startX = arc.x + cos * radius;
                     const startY = arc.y + sin * radius;
-                    const elbowX = arc.x + cos * (radius + 22);
-                    const elbowY = arc.y + sin * (radius + 18);
+                    const elbowX = arc.x + cos * (radius + 20);
+                    const elbowY = arc.y + sin * (radius + 16);
                     const rightSide = cos >= 0;
-                    const endX = elbowX + (rightSide ? sideOffset : -sideOffset);
+                    const minLabelAnchorX = arc.x + (rightSide ? radius + 34 : -(radius + 34));
+                    const endX = rightSide
+                        ? Math.max(elbowX + sideOffset, minLabelAnchorX)
+                        : Math.min(elbowX - sideOffset, minLabelAnchorX);
                     const labelPayload = {
                         index,
                         raw,
@@ -1177,9 +1182,14 @@
                     const pct = Math.round((raw / total) * 100);
                     const label = chart.data.labels[index];
                     const text = `${pct}% ${label}`;
+                    const rawTextX = endX + (rightSide ? 5 : -5);
+                    const textWidth = ctx.measureText(text).width;
+                    const textX = rightSide
+                        ? Math.min(rawTextX, canvasMaxX - textWidth)
+                        : Math.max(rawTextX, canvasMinX + textWidth);
                     ctx.textAlign = rightSide ? 'left' : 'right';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(text, endX + (rightSide ? 5 : -5), elbowY);
+                    ctx.fillText(text, textX, elbowY);
                 });
 
                 ctx.restore();
@@ -1454,7 +1464,8 @@
                     meta.data.forEach((bar, index) => {
                         const value = Number(dataset.data[index] || 0);
                         if (!value) return;
-                        const y = value >= 0 ? bar.y - 6 : bar.y + 14;
+                        const chartTop = chart.chartArea.top + 20;
+                        const y = value >= 0 ? Math.max(chartTop, bar.y - 12) : bar.y + 14;
                         ctx.fillText(`$${Math.round(value).toLocaleString()}`, bar.x, y);
                     });
                 });
@@ -1469,6 +1480,8 @@
 
             recordBillingHistory();
             const cycles = getTrendCycles();
+            const trendMaxValue = Math.max(0, ...cycles.flatMap(c => [c.expenses, c.savingsOccurred]));
+            const yAxisHeadroom = Math.max(500, Math.ceil((trendMaxValue * 1.18) / 100) * 100);
 
             if (trendChart) trendChart.destroy();
 
@@ -1497,6 +1510,9 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: { top: 20, right: 12, left: 6, bottom: 4 }
+                    },
                     plugins: {
                         tooltip: {
                             backgroundColor: '#1f1f1f',
@@ -1530,6 +1546,7 @@
                     scales: {
                         y: {
                             beginAtZero: true,
+                            suggestedMax: yAxisHeadroom,
                             ticks: {
                                 color: '#707070',
                                 font: { size: 12, weight: '700' },
@@ -1588,7 +1605,7 @@
                     maintainAspectRatio: false,
                     cutout: '56%',
                     layout: {
-                        padding: { left: 70, right: 70, top: 28, bottom: 28 }
+                        padding: { left: 88, right: 88, top: 34, bottom: 34 }
                     },
                     plugins: {
                         legend: {
