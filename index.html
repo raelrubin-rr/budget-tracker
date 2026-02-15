@@ -1090,7 +1090,7 @@
 
                 const { ctx } = chart;
                 const minimumPctForLabel = 8;
-                const sideOffset = 44;
+                const sideOffset = 32;
                 const minimumSpacing = 26;
                 const topBound = chart.chartArea.top + 16;
                 const bottomBound = chart.chartArea.bottom - 16;
@@ -1464,8 +1464,8 @@
                     meta.data.forEach((bar, index) => {
                         const value = Number(dataset.data[index] || 0);
                         if (!value) return;
-                        const chartTop = chart.chartArea.top + 20;
-                        const y = value >= 0 ? Math.max(chartTop, bar.y - 12) : bar.y + 14;
+                        const chartTop = chart.chartArea.top + 12;
+                        const y = value >= 0 ? Math.max(chartTop, bar.y - 8) : bar.y + 14;
                         ctx.fillText(`$${Math.round(value).toLocaleString()}`, bar.x, y);
                     });
                 });
@@ -1511,7 +1511,7 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     layout: {
-                        padding: { top: 20, right: 12, left: 6, bottom: 4 }
+                        padding: { top: 8, right: 10, left: 4, bottom: 4 }
                     },
                     plugins: {
                         tooltip: {
@@ -1605,7 +1605,7 @@
                     maintainAspectRatio: false,
                     cutout: '56%',
                     layout: {
-                        padding: { left: 88, right: 88, top: 34, bottom: 34 }
+                        padding: { left: 78, right: 78, top: 32, bottom: 32 }
                     },
                     plugins: {
                         legend: {
