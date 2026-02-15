@@ -1187,11 +1187,32 @@
         };
 
         function autoCategorize(name) {
-            const n = name.toLowerCase();
+            const n = (name || '').toLowerCase();
             for (const [cat, keywords] of Object.entries(CATEGORIES)) {
                 if (keywords.some(k => n.includes(k))) return cat;
             }
             return 'other';
+        }
+
+        function getCategoryLabel(category) {
+            const labelMap = {
+                groceries: 'Groceries',
+                dining: 'Dining',
+                transportation: 'Transportation',
+                entertainment: 'Entertainment',
+                shopping: 'Shopping',
+                subscription: 'Subscription',
+                other: 'Other'
+            };
+            return labelMap[category] || 'Other';
+        }
+
+        function normalizeTransactionCategory(tx) {
+            const category = tx.category || autoCategorize(tx.name);
+            tx.category = category;
+            tx.categoryLabel = tx.categoryLabel || getCategoryLabel(category);
+            tx.categoryIcon = tx.categoryIcon || getCategoryEmoji(category);
+            return tx;
         }
 
         function detectRecurring(txs) {
@@ -1659,6 +1680,7 @@
         }
 
         function updateTransactions() {
+            state.transactions = state.transactions.map(normalizeTransactionCategory);
             const checkingTx = state.transactions.filter(t => t.account === 'checking');
             const creditTx = state.transactions.filter(t => t.account === 'credit');
             const recurringNames = detectRecurring(state.transactions);
@@ -1702,6 +1724,9 @@
         function getTransactionEmoji(tx) {
             if (tx.account === 'checking' && tx.amount > 0) {
                 return getCheckingDepositEmoji(tx.name);
+            }
+            if (tx.categoryIcon) {
+                return tx.categoryIcon;
             }
             const category = tx.category || autoCategorize(tx.name);
             return getCategoryEmoji(category);
@@ -2003,13 +2028,8 @@
                     throw new Error(errMsg);
                 }
                 
-                state.transactions = data.transactions;
-                state.transactions.forEach(tx => {
-                    if (!tx.category || tx.category === 'other') {
-                        tx.category = autoCategorize(tx.name);
-                    }
-                });
-                
+                state.transactions = (data.transactions || []).map(normalizeTransactionCategory);
+
                 updateUI();
             } catch (error) {
                 console.error('Error fetching transactions:', error);

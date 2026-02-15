@@ -1,5 +1,6 @@
 const { PlaidApi, PlaidEnvironments, Configuration } = require('plaid');
 const { assertPlaidConfig, parseJsonBody, setCommonHeaders } = require('./_utils');
+const { categorizeTransactions } = require('./_categorization');
 
 const configuration = new Configuration({
   basePath: PlaidEnvironments.sandbox,
@@ -44,7 +45,7 @@ module.exports = async (req, res) => {
     const accountsResponse = await plaidClient.accountsGet({ access_token });
     const accounts = accountsResponse.data.accounts;
 
-    const transactions = response.data.transactions.map((tx) => {
+    const rawTransactions = response.data.transactions.map((tx) => {
       const account = accounts.find((acc) => acc.account_id === tx.account_id);
       const accountType = account?.type === 'credit' ? 'credit' : 'checking';
 
@@ -56,10 +57,14 @@ module.exports = async (req, res) => {
         pending: tx.pending,
         account: accountType,
         category: tx.category ? tx.category[0].toLowerCase() : 'other',
+        merchant_name: tx.merchant_name,
+        personal_finance_category: tx.personal_finance_category,
         reimbursable: 0,
         linkedDeposit: null,
       };
     });
+
+    const transactions = (await categorizeTransactions(rawTransactions)).map(({ merchant_name, personal_finance_category, ...tx }) => tx);
 
     return res.status(200).json({
       transactions,
