@@ -269,17 +269,20 @@
             border-radius: 16px;
             margin-bottom: 32px;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 640px;
         }
 
         .transactions-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
-            align-items: start;
+            align-items: stretch;
         }
 
         .section-header {
-            padding: 32px 40px;
+            padding: 24px 28px;
             border-bottom: 2px solid var(--border-color);
             display: flex;
             justify-content: space-between;
@@ -309,6 +312,10 @@
             max-height: 2000px;
             overflow: hidden;
             transition: max-height 0.4s ease;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
         }
 
         .section-content.collapsed {
@@ -316,21 +323,21 @@
         }
 
         .filter-bar {
-            padding: 24px 40px;
+            padding: 16px 20px;
             border-bottom: 2px solid var(--border-color);
             display: flex;
-            gap: 20px;
+            gap: 12px;
         }
 
         .search-input, .filter-select {
             flex: 1;
             min-width: 200px;
-            padding: 16px 20px;
+            padding: 12px 14px;
             background: var(--bg-tertiary);
             border: 2px solid var(--border-color);
             border-radius: 8px;
             color: var(--text-primary);
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
             font-family: 'Inter', sans-serif;
         }
@@ -345,15 +352,27 @@
         }
 
         .transaction-list {
-            padding: 24px 40px;
+            padding: 8px 20px 12px;
+            overflow-y: auto;
+            min-height: 0;
+            flex: 1;
+        }
+
+        .transaction-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .transaction-list::-webkit-scrollbar-thumb {
+            background: #2f2f2f;
+            border-radius: 999px;
         }
 
         .expense-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 0;
-            border-bottom: 2px solid var(--border-color);
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
             transition: background 0.2s;
         }
 
@@ -363,9 +382,9 @@
 
         .expense-item:hover {
             background: var(--bg-tertiary);
-            margin: 0 -20px;
-            padding-left: 20px;
-            padding-right: 20px;
+            margin: 0 -10px;
+            padding-left: 10px;
+            padding-right: 10px;
             border-radius: 8px;
         }
 
@@ -376,14 +395,14 @@
         .expense-name {
             display: flex;
             align-items: flex-start;
-            gap: 12px;
+            gap: 10px;
             flex: 1;
         }
 
         .category-emoji {
-            font-size: 15px;
+            font-size: 14px;
             line-height: 1;
-            margin-top: 2px;
+            margin-top: 1px;
             opacity: 0.75;
         }
 
@@ -395,9 +414,9 @@
         }
 
         .transaction-title {
-            font-size: 16px;
+            font-size: 14px;
             color: var(--text-primary);
-            font-weight: 700;
+            font-weight: 600;
             display: flex;
             align-items: center;
             flex-wrap: wrap;
@@ -405,23 +424,23 @@
         }
 
         .transaction-date {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-tertiary);
             font-weight: 600;
         }
 
         .expense-amount {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 800;
             color: var(--text-primary);
-            margin-left: 20px;
+            margin-left: 12px;
         }
 
         .expense-amount.crossed {
             text-decoration: line-through;
             color: var(--text-tertiary);
-            margin-right: 16px;
-            font-size: 16px;
+            margin-right: 10px;
+            font-size: 14px;
         }
 
         .badge {
@@ -564,6 +583,17 @@
         .fixed-expense-value {
             min-width: 110px;
             text-align: right;
+        }
+
+        .fixed-expense-clickable {
+            cursor: pointer;
+            border-bottom: 1px dashed transparent;
+            transition: border-color 0.2s, color 0.2s;
+        }
+
+        .fixed-expense-clickable:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
         }
 
         .setting-item.connected .setting-value {
@@ -716,6 +746,15 @@
             }
             .transactions-grid {
                 grid-template-columns: 1fr;
+            }
+            .transaction-section {
+                height: 520px;
+            }
+            .filter-bar {
+                flex-direction: column;
+            }
+            .search-input, .filter-select {
+                min-width: 0;
             }
         }
     </style>
@@ -1003,6 +1042,9 @@
                 ctx.strokeStyle = 'rgba(209, 213, 219, 0.55)';
                 ctx.lineWidth = 1.2;
 
+                const leftLabels = [];
+                const rightLabels = [];
+
                 meta.data.forEach((arc, index) => {
                     const raw = dataset.data[index];
                     if (!raw) return;
@@ -1017,7 +1059,50 @@
                     const elbowX = arc.x + cos * (radius + 14);
                     const elbowY = arc.y + sin * (radius + 14);
                     const rightSide = cos >= 0;
-                    const endX = elbowX + (rightSide ? 18 : -18);
+                    const endX = elbowX + (rightSide ? 28 : -28);
+                    const labelPayload = {
+                        index,
+                        raw,
+                        startX,
+                        startY,
+                        elbowX,
+                        elbowY,
+                        endX,
+                        rightSide
+                    };
+                    if (rightSide) rightLabels.push(labelPayload);
+                    else leftLabels.push(labelPayload);
+                });
+
+                const applyVerticalSpacing = (items) => {
+                    if (!items.length) return;
+                    const minimumSpacing = 16;
+                    const topBound = chart.chartArea.top + 10;
+                    const bottomBound = chart.chartArea.bottom - 10;
+
+                    items.sort((a, b) => a.elbowY - b.elbowY);
+                    for (let i = 1; i < items.length; i++) {
+                        if (items[i].elbowY - items[i - 1].elbowY < minimumSpacing) {
+                            items[i].elbowY = items[i - 1].elbowY + minimumSpacing;
+                        }
+                    }
+
+                    for (let i = items.length - 2; i >= 0; i--) {
+                        if (items[i + 1].elbowY > bottomBound && items[i + 1].elbowY - items[i].elbowY < minimumSpacing) {
+                            items[i].elbowY = items[i + 1].elbowY - minimumSpacing;
+                        }
+                    }
+
+                    items.forEach(item => {
+                        item.elbowY = Math.max(topBound, Math.min(bottomBound, item.elbowY));
+                    });
+                };
+
+                applyVerticalSpacing(leftLabels);
+                applyVerticalSpacing(rightLabels);
+
+                [...leftLabels, ...rightLabels].forEach((item) => {
+                    const { index, raw, startX, startY, elbowX, elbowY, endX, rightSide } = item;
 
                     ctx.beginPath();
                     ctx.moveTo(startX, startY);
@@ -1188,44 +1273,76 @@
             return { daysLeft, weekendsLeft };
         }
 
+        function getBillingCycles(count = 2) {
+            const cycles = [];
+            const today = new Date();
+            const startDay = state.budgetStartDay || 4;
+            let cycleStart;
+
+            if (today.getDate() >= startDay) {
+                cycleStart = new Date(today.getFullYear(), today.getMonth(), startDay);
+            } else {
+                cycleStart = new Date(today.getFullYear(), today.getMonth() - 1, startDay);
+            }
+
+            for (let i = 0; i < count; i++) {
+                const start = new Date(cycleStart.getFullYear(), cycleStart.getMonth() - (count - 1 - i), startDay);
+                const end = new Date(start.getFullYear(), start.getMonth() + 1, startDay);
+                const labelMonth = start.toLocaleDateString('en-US', { month: 'short' });
+                cycles.push({ start, end, label: `${labelMonth} ${startDay}` });
+            }
+
+            return cycles;
+        }
+
         function updateTrendChart() {
             const ctx = document.getElementById('trendChart');
             if (!ctx) return;
-            
-            const months = [];
-            const today = new Date();
-            
-            for (let i = 2; i >= 0; i--) {
-                const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
-                const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-                const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
-                
-                const monthSpending = state.transactions
-                    .filter(t => t.amount < 0 && t.account === 'credit')
+
+            const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
+            const plannedSavings = Math.round(state.savings || 0);
+
+            const cycles = getBillingCycles(2).map(cycle => {
+                const cycleSpending = state.transactions
+                    .filter(t => t.amount < 0)
                     .filter(t => {
                         const txDate = new Date(t.date);
-                        return txDate >= monthStart && txDate <= monthEnd;
+                        return txDate >= cycle.start && txDate < cycle.end;
                     })
-                    .reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0);
-                
-                const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
-                const isCurrent = i === 0;
-                months.push({ label: monthName + (isCurrent ? ' (Current)' : ''), value: Math.round(monthSpending), isCurrent });
-            }
+                    .reduce((sum, t) => sum + Math.abs(t.amount || 0) - (t.reimbursable || 0), 0);
+
+                const availableToSpend = state.income - totalFixed - plannedSavings - cycleSpending;
+                const actualSaved = plannedSavings + availableToSpend;
+
+                return {
+                    label: cycle.label,
+                    plannedSavings,
+                    actualSaved: Math.round(actualSaved)
+                };
+            });
             
             if (trendChart) trendChart.destroy();
             
             trendChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: months.map(m => m.label),
+                    labels: cycles.map(c => c.label),
                     datasets: [{
-                        data: months.map(m => m.value),
-                        backgroundColor: months.map(m => m.isCurrent ? '#10b981' : '#374151'),
+                        label: 'Planned Savings',
+                        data: cycles.map(c => c.plannedSavings),
+                        backgroundColor: '#3669D5',
                         borderRadius: 6,
                         borderSkipped: false,
                         borderWidth: 0,
-                        barThickness: 34
+                        barThickness: 26
+                    }, {
+                        label: 'Actual Saved',
+                        data: cycles.map(c => c.actualSaved),
+                        backgroundColor: '#10b981',
+                        borderRadius: 6,
+                        borderSkipped: false,
+                        borderWidth: 0,
+                        barThickness: 26
                     }]
                 },
                 options: {
@@ -1243,8 +1360,15 @@
                             bodyFont: { size: 12, weight: '500' },
                             callbacks: {
                                 label: function(context) {
-                                    return 'Spent: $' + context.parsed.y.toLocaleString();
+                                    const value = Number.isFinite(context.parsed.y) ? context.parsed.y : 0;
+                                    return `${context.dataset.label}: $${Math.round(value).toLocaleString()}`;
                                 }
+                            }
+                        },
+                        legend: {
+                            labels: {
+                                color: '#b0b0b0',
+                                font: { size: 12, weight: '600' }
                             }
                         }
                     },
@@ -1381,10 +1505,7 @@
                     <div class="setting-item">
                         <span class="setting-label">${exp.name}</span>
                         <div class="fixed-expense-meta">
-                            <span class="setting-value fixed-expense-value">$${Math.round(exp.amount).toLocaleString()}</span>
-                            <div class="expense-actions">
-                                <button class="inline-action" onclick="event.stopPropagation(); openFixedModal(${index})">Edit</button>
-                            </div>
+                            <span class="setting-value fixed-expense-value fixed-expense-clickable" onclick="event.stopPropagation(); openFixedModal(${index})">$${Math.round(exp.amount).toLocaleString()}</span>
                         </div>
                     </div>
                 `).join('');
