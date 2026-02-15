@@ -1479,17 +1479,20 @@
         }
 
         function checkConnection() {
-            const institution = localStorage.getItem('plaid_institution');
-            if (accessToken && institution) {
-                document.getElementById('statusText').textContent = 'Connected - ' + institution;
-                document.getElementById('connectionStatus').classList.add('connected');
-                document.getElementById('connectBtn').textContent = 'Reconnect Account';
-                fetchTransactions();
-            } else {
-                loadDemoData();
-            }
-        }
-
+    const institution = localStorage.getItem('plaid_institution');
+    const statusTextEl = document.getElementById('statusText');
+    const connectionStatusEl = document.getElementById('connectionStatus');
+    const connectBtnEl = document.getElementById('connectBtn');
+    
+    if (accessToken && institution && statusTextEl && connectionStatusEl && connectBtnEl) {
+        statusTextEl.textContent = 'Connected - ' + institution;
+        connectionStatusEl.classList.add('connected');
+        connectBtnEl.textContent = 'Reconnect Account';
+        fetchTransactions();
+    } else {
+        loadDemoData();
+    }
+}
         checkConnection();
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
