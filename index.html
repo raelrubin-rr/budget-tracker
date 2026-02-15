@@ -99,24 +99,24 @@
             background: var(--bg-secondary);
             border: 2px solid var(--border-color);
             border-radius: 16px;
-            padding: 48px;
-            margin-bottom: 32px;
+            padding: 36px;
+            margin-bottom: 24px;
         }
 
         .date-info {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 24px;
         }
 
         .current-date {
-            font-size: 18px;
+            font-size: 32px;
             color: var(--text-primary);
             font-weight: 700;
             margin-bottom: 8px;
         }
 
         .days-remaining {
-            font-size: 14px;
+            font-size: 22px;
             color: var(--text-secondary);
             font-weight: 600;
         }
@@ -133,7 +133,22 @@
             background: var(--bg-tertiary);
             border: 2px solid var(--border-color);
             border-radius: 12px;
-            padding: 32px;
+            padding: 24px;
+        }
+
+        .budget-surface {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            align-items: stretch;
+        }
+
+        .budget-surface .budget-section {
+            margin: 0;
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .budget-label {
@@ -747,6 +762,9 @@
             .transactions-grid {
                 grid-template-columns: 1fr;
             }
+            .budget-surface {
+                grid-template-columns: 1fr;
+            }
             .transaction-section {
                 height: 520px;
             }
@@ -824,13 +842,15 @@
                 <div class="days-remaining" id="daysRemaining">18 days • 2 weekends</div>
             </div>
 
-            <div class="budget-section">
-                <div class="budget-label">Available to Spend</div>
-                <div class="budget-value green" id="availableAmount">$0</div>
-                <div class="budget-subtext">Spent this period: <span id="spentAmount">$0</span></div>
-                <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid var(--border-color);">
-                    <div style="font-size: 28px; font-weight: 800; color: var(--purple);" id="weekendBudget">$0</div>
-                    <div style="font-size: 13px; color: var(--text-tertiary); margin-top: 4px; font-weight: 600;" id="weekendText">per weekend</div>
+            <div class="budget-surface">
+                <div class="budget-section">
+                    <div class="budget-label">Available to Spend</div>
+                    <div class="budget-value green" id="availableAmount">$0</div>
+                </div>
+                <div class="budget-section">
+                    <div class="budget-label">Remaining Per Weekend</div>
+                    <div class="budget-value purple" id="weekendBudget">$0</div>
+                    <div class="budget-subtext" id="weekendText">per weekend</div>
                 </div>
             </div>
 
@@ -895,7 +915,7 @@
                     <div class="filter-bar">
                         <input type="text" class="search-input" id="checkingSearch" placeholder="Search transactions..." onkeyup="filterTransactions('checking')">
                         <select class="filter-select" id="checkingTypeFilter" onchange="filterTransactions('checking')">
-                            <option value="">All Types</option>
+                            <option value="">All Categories</option>
                             <option value="deposit">💵 Deposit</option>
                             <option value="paycheck">💼 Paycheck</option>
                             <option value="venmo">🤝 Venmo</option>
@@ -1009,11 +1029,30 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
-        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], connectedAccount: null };
+        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], connectedAccount: null, billingHistory: [] };
         let editingFixedExpenseIndex = null;
         let currentReimbursableIndex = null;
         let trendChart = null;
         let categoryChart = null;
+
+        const BILLING_HISTORY_KEY = 'budget_billing_history_v1';
+        const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+        function loadBillingHistory() {
+            try {
+                const raw = localStorage.getItem(BILLING_HISTORY_KEY);
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (error) {
+                console.warn('Unable to parse billing history, resetting memory.', error);
+                return [];
+            }
+        }
+
+        function persistBillingHistory() {
+            localStorage.setItem(BILLING_HISTORY_KEY, JSON.stringify(state.billingHistory || []));
+        }
 
         const CATEGORIES = {
             groceries: ['whole foods', 'trader joes', 'safeway', 'kroger', 'walmart', 'target', 'costco', 'grocery'],
@@ -1023,6 +1062,20 @@
             shopping: ['amazon', 'ebay', 'etsy', 'mall', 'store', 'shop', 'target'],
             subscription: ['subscription', 'prime', 'pro', 'plus', 'premium', 'membership', 'spotify', 'netflix']
         };
+
+        const DONUT_PALETTES = {
+            vibrant: ['#ef4444', '#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#06b6d4', '#ec4899', '#84cc16'],
+            sunset: ['#f97316', '#ef4444', '#fb7185', '#f59e0b', '#facc15', '#eab308', '#dc2626', '#ea580c'],
+            ocean: ['#0ea5e9', '#0284c7', '#06b6d4', '#14b8a6', '#22d3ee', '#38bdf8', '#0891b2', '#0369a1'],
+            pastel: ['#60a5fa', '#f9a8d4', '#86efac', '#fcd34d', '#c4b5fd', '#67e8f9', '#fdba74', '#fda4af'],
+            colorblindSafe: ['#0072B2', '#E69F00', '#009E73', '#CC79A7', '#56B4E9', '#D55E00', '#F0E442', '#999999']
+        };
+
+        const ACTIVE_DONUT_PALETTE = 'vibrant';
+
+        function getDonutPalette() {
+            return DONUT_PALETTES[ACTIVE_DONUT_PALETTE] || DONUT_PALETTES.vibrant;
+        }
 
 
         const donutCategoryLabelPlugin = {
@@ -1036,6 +1089,12 @@
                 if (!total) return;
 
                 const { ctx } = chart;
+                const minimumPctForLabel = 8;
+                const sideOffset = 44;
+                const minimumSpacing = 26;
+                const topBound = chart.chartArea.top + 16;
+                const bottomBound = chart.chartArea.bottom - 16;
+
                 ctx.save();
                 ctx.font = '600 11px Inter, sans-serif';
                 ctx.fillStyle = '#d1d5db';
@@ -1046,8 +1105,11 @@
                 const rightLabels = [];
 
                 meta.data.forEach((arc, index) => {
-                    const raw = dataset.data[index];
+                    const raw = Number(dataset.data[index] || 0);
                     if (!raw) return;
+
+                    const pct = (raw / total) * 100;
+                    if (pct < minimumPctForLabel) return;
 
                     const angle = (arc.startAngle + arc.endAngle) / 2;
                     const cos = Math.cos(angle);
@@ -1056,13 +1118,14 @@
 
                     const startX = arc.x + cos * radius;
                     const startY = arc.y + sin * radius;
-                    const elbowX = arc.x + cos * (radius + 14);
-                    const elbowY = arc.y + sin * (radius + 14);
+                    const elbowX = arc.x + cos * (radius + 22);
+                    const elbowY = arc.y + sin * (radius + 18);
                     const rightSide = cos >= 0;
-                    const endX = elbowX + (rightSide ? 28 : -28);
+                    const endX = elbowX + (rightSide ? sideOffset : -sideOffset);
                     const labelPayload = {
                         index,
                         raw,
+                        pct,
                         startX,
                         startY,
                         elbowX,
@@ -1076,21 +1139,22 @@
 
                 const applyVerticalSpacing = (items) => {
                     if (!items.length) return;
-                    const minimumSpacing = 16;
-                    const topBound = chart.chartArea.top + 10;
-                    const bottomBound = chart.chartArea.bottom - 10;
-
                     items.sort((a, b) => a.elbowY - b.elbowY);
+
                     for (let i = 1; i < items.length; i++) {
                         if (items[i].elbowY - items[i - 1].elbowY < minimumSpacing) {
                             items[i].elbowY = items[i - 1].elbowY + minimumSpacing;
                         }
                     }
 
-                    for (let i = items.length - 2; i >= 0; i--) {
-                        if (items[i + 1].elbowY > bottomBound && items[i + 1].elbowY - items[i].elbowY < minimumSpacing) {
-                            items[i].elbowY = items[i + 1].elbowY - minimumSpacing;
-                        }
+                    if (items[items.length - 1].elbowY > bottomBound) {
+                        const shiftUp = items[items.length - 1].elbowY - bottomBound;
+                        items.forEach(item => { item.elbowY -= shiftUp; });
+                    }
+
+                    if (items[0].elbowY < topBound) {
+                        const shiftDown = topBound - items[0].elbowY;
+                        items.forEach(item => { item.elbowY += shiftDown; });
                     }
 
                     items.forEach(item => {
@@ -1174,7 +1238,7 @@
 
         function loadDemoData(preserveSettings = false) {
             const demoState = {
-                income: 6500, savings: 1000, budgetStartDay: 4,
+                income: 6500, savings: 1000, budgetStartDay: 4, billingHistory: state.billingHistory || [],
                 fixedExpenses: [
                     { name: 'Rent', amount: 2200 }, { name: 'Car Payment', amount: 450 },
                     { name: 'Insurance', amount: 180 }, { name: 'Utilities', amount: 120 }, { name: 'Subscriptions', amount: 85 }
@@ -1218,6 +1282,7 @@
                     savings: state.savings || demoState.savings,
                     budgetStartDay: state.budgetStartDay || demoState.budgetStartDay,
                     fixedExpenses: state.fixedExpenses.length ? state.fixedExpenses : demoState.fixedExpenses,
+                    billingHistory: state.billingHistory || demoState.billingHistory || [],
                 }
                 : demoState;
 
@@ -1273,76 +1338,139 @@
             return { daysLeft, weekendsLeft };
         }
 
-        function getBillingCycles(count = 2) {
-            const cycles = [];
-            const today = new Date();
+        function getCurrentCycleRange(referenceDate = new Date()) {
             const startDay = state.budgetStartDay || 4;
-            let cycleStart;
+            let start;
 
-            if (today.getDate() >= startDay) {
-                cycleStart = new Date(today.getFullYear(), today.getMonth(), startDay);
+            if (referenceDate.getDate() >= startDay) {
+                start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), startDay);
             } else {
-                cycleStart = new Date(today.getFullYear(), today.getMonth() - 1, startDay);
+                start = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 1, startDay);
             }
 
-            for (let i = 0; i < count; i++) {
-                const start = new Date(cycleStart.getFullYear(), cycleStart.getMonth() - (count - 1 - i), startDay);
-                const end = new Date(start.getFullYear(), start.getMonth() + 1, startDay);
-                const labelMonth = start.toLocaleDateString('en-US', { month: 'short' });
-                cycles.push({ start, end, label: `${labelMonth} ${startDay}` });
+            const end = new Date(start.getFullYear(), start.getMonth() + 1, startDay);
+            return { start, end };
+        }
+
+        function getCycleFromOffset(offset) {
+            const { start } = getCurrentCycleRange();
+            const cycleStart = new Date(start.getFullYear(), start.getMonth() - offset, state.budgetStartDay || 4);
+            const cycleEnd = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, state.budgetStartDay || 4);
+            const label = cycleStart.toLocaleDateString('en-US', { month: 'short' });
+            return { start: cycleStart, end: cycleEnd, label, cycleId: cycleStart.toISOString().split('T')[0] };
+        }
+
+        function calculateCycleMetrics(cycle) {
+            const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
+            const plannedSavings = Math.round(state.savings || 0);
+
+            const cycleSpending = state.transactions
+                .filter(t => t.amount < 0)
+                .filter(t => {
+                    const txDate = new Date(t.date);
+                    return txDate >= cycle.start && txDate < cycle.end;
+                })
+                .reduce((sum, t) => sum + Math.abs(t.amount || 0) - (t.reimbursable || 0), 0);
+
+            const availableToSpend = state.income - totalFixed - plannedSavings - cycleSpending;
+            const savingsOccurred = plannedSavings + availableToSpend;
+
+            return {
+                cycleId: cycle.cycleId,
+                label: cycle.label,
+                cycleEnd: cycle.end.toISOString(),
+                expenses: Math.round(cycleSpending),
+                savingsOccurred: Math.round(savingsOccurred),
+            };
+        }
+
+        function recordBillingHistory() {
+            if (!Array.isArray(state.billingHistory)) state.billingHistory = [];
+
+            const now = new Date();
+            const justFinishedCycle = getCycleFromOffset(1);
+            const oneDayAfterCycleEnd = justFinishedCycle.end.getTime() + MS_PER_DAY;
+            if (now.getTime() < oneDayAfterCycleEnd) return;
+
+            const metrics = calculateCycleMetrics(justFinishedCycle);
+            const existingIndex = state.billingHistory.findIndex(entry => entry.cycleId === metrics.cycleId);
+
+            if (existingIndex >= 0) state.billingHistory[existingIndex] = metrics;
+            else state.billingHistory.push(metrics);
+
+            state.billingHistory = state.billingHistory
+                .sort((a, b) => new Date(a.cycleEnd) - new Date(b.cycleEnd))
+                .slice(-3);
+
+            persistBillingHistory();
+        }
+
+        function getTrendCycles() {
+            const historyByCycle = new Map((state.billingHistory || []).map(entry => [entry.cycleId, entry]));
+            const cycles = [];
+
+            for (let offset = 2; offset >= 0; offset--) {
+                const cycle = getCycleFromOffset(offset);
+                const recorded = historyByCycle.get(cycle.cycleId);
+                cycles.push(recorded || calculateCycleMetrics(cycle));
             }
 
             return cycles;
         }
 
+        const barValueLabelPlugin = {
+            id: 'barValueLabelPlugin',
+            afterDatasetsDraw(chart) {
+                const { ctx } = chart;
+                ctx.save();
+                ctx.fillStyle = '#d1d5db';
+                ctx.font = '700 11px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+
+                chart.data.datasets.forEach((dataset, datasetIndex) => {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    meta.data.forEach((bar, index) => {
+                        const value = Number(dataset.data[index] || 0);
+                        if (!value) return;
+                        const y = value >= 0 ? bar.y - 6 : bar.y + 14;
+                        ctx.fillText(`$${Math.round(value).toLocaleString()}`, bar.x, y);
+                    });
+                });
+
+                ctx.restore();
+            }
+        };
+
         function updateTrendChart() {
             const ctx = document.getElementById('trendChart');
             if (!ctx) return;
 
-            const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
-            const plannedSavings = Math.round(state.savings || 0);
+            recordBillingHistory();
+            const cycles = getTrendCycles();
 
-            const cycles = getBillingCycles(2).map(cycle => {
-                const cycleSpending = state.transactions
-                    .filter(t => t.amount < 0)
-                    .filter(t => {
-                        const txDate = new Date(t.date);
-                        return txDate >= cycle.start && txDate < cycle.end;
-                    })
-                    .reduce((sum, t) => sum + Math.abs(t.amount || 0) - (t.reimbursable || 0), 0);
-
-                const availableToSpend = state.income - totalFixed - plannedSavings - cycleSpending;
-                const actualSaved = plannedSavings + availableToSpend;
-
-                return {
-                    label: cycle.label,
-                    plannedSavings,
-                    actualSaved: Math.round(actualSaved)
-                };
-            });
-            
             if (trendChart) trendChart.destroy();
-            
+
             trendChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: cycles.map(c => c.label),
                     datasets: [{
-                        label: 'Planned Savings',
-                        data: cycles.map(c => c.plannedSavings),
-                        backgroundColor: '#3669D5',
+                        label: 'Expenses',
+                        data: cycles.map(c => c.expenses),
+                        backgroundColor: '#ef4444',
                         borderRadius: 6,
                         borderSkipped: false,
                         borderWidth: 0,
-                        barThickness: 26
+                        barThickness: 20
                     }, {
-                        label: 'Actual Saved',
-                        data: cycles.map(c => c.actualSaved),
+                        label: 'Savings',
+                        data: cycles.map(c => c.savingsOccurred),
                         backgroundColor: '#10b981',
                         borderRadius: 6,
                         borderSkipped: false,
                         borderWidth: 0,
-                        barThickness: 26
+                        barThickness: 20
                     }]
                 },
                 options: {
@@ -1372,6 +1500,12 @@
                             }
                         }
                     },
+                    datasets: {
+                        bar: {
+                            categoryPercentage: 0.62,
+                            barPercentage: 0.78
+                        }
+                    },
                     scales: {
                         y: {
                             beginAtZero: true,
@@ -1392,7 +1526,8 @@
                             grid: { display: false }
                         }
                     }
-                }
+                },
+                plugins: [barValueLabelPlugin]
             });
         }
 
@@ -1411,7 +1546,7 @@
             
             const labels = Object.keys(categoryTotals);
             const data = Object.values(categoryTotals);
-            const palette = ['#1AA9D0', '#2488D5', '#3669D5', '#2140A3', '#161F6F'];
+            const palette = getDonutPalette();
             const chartLabels = labels.map(l => l.charAt(0).toUpperCase() + l.slice(1));
             
             if (categoryChart) categoryChart.destroy();
@@ -1432,7 +1567,7 @@
                     maintainAspectRatio: false,
                     cutout: '56%',
                     layout: {
-                        padding: { left: 54, right: 54, top: 20, bottom: 20 }
+                        padding: { left: 70, right: 70, top: 28, bottom: 28 }
                     },
                     plugins: {
                         legend: {
@@ -1472,12 +1607,17 @@
             setTextIfPresent('daysRemaining', `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} • ${weekendsLeft} ${weekendsLeft === 1 ? 'weekend' : 'weekends'}`);
             
             const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
-            const variableSpent = Math.round(state.transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0));
+            const postedSpent = Math.round(state.transactions
+                .filter(t => t.amount < 0 && !t.pending)
+                .reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0));
+            const pendingSpent = Math.round(state.transactions
+                .filter(t => t.amount < 0 && t.pending)
+                .reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0));
+            const variableSpent = postedSpent + pendingSpent;
             const available = state.income - totalFixed - state.savings - variableSpent;
             const budgetTotal = state.income - totalFixed - state.savings;
             const percentUsed = budgetTotal > 0 ? (variableSpent / budgetTotal) * 100 : 0;
             
-            setTextIfPresent('spentAmount', `$${variableSpent.toLocaleString()}`);
             setTextIfPresent('availableAmount', `$${Math.round(available).toLocaleString()}`);
             
             const weekendBudget = weekendsLeft > 0 ? Math.round(available / weekendsLeft) : 0;
@@ -1880,6 +2020,7 @@
 
         function checkConnection() {
             const institution = localStorage.getItem('plaid_institution');
+            state.billingHistory = loadBillingHistory();
 
             if (accessToken && institution) {
                 setConnectionState(institution);
