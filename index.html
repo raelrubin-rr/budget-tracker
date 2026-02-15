@@ -257,8 +257,8 @@
 
         .chart-card {
             background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
             padding: 24px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
             width: 100%;
@@ -266,20 +266,21 @@
         }
 
         .chart-title {
-            font-size: 15px;
+            font-size: 16px;
             color: var(--text-primary);
-            font-weight: 600;
-            margin-bottom: 16px;
+            font-weight: 700;
+            margin-bottom: 18px;
             letter-spacing: 0.01em;
+            text-align: center;
         }
 
         .chart-container {
             position: relative;
-            height: 320px;
+            height: 330px;
         }
 
         .chart-container.pie {
-            height: 320px;
+            height: 330px;
         }
 
         /* Transactions */
@@ -629,6 +630,10 @@
         .fixed-expense-value {
             min-width: 110px;
             text-align: right;
+        }
+
+        .fixed-expense-value.editable-value {
+            width: 110px;
         }
 
         .setting-item.connected .setting-value {
@@ -1372,20 +1377,21 @@
                 endDate = new Date(currentYear, currentMonth, startDay);
             }
             const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-            let weekendsLeft = 0;
             let currentDate = new Date(today);
-            const weekendsCounted = new Set();
+            const weekendPeriods = new Set();
+
             while (currentDate <= endDate) {
-                if (currentDate.getDay() === 6) {
-                    const weekendKey = currentDate.toDateString();
-                    if (!weekendsCounted.has(weekendKey)) {
-                        weekendsLeft++;
-                        weekendsCounted.add(weekendKey);
-                    }
+                const day = currentDate.getDay();
+                if (day === 0 || day === 6) {
+                    const weekendAnchor = new Date(currentDate);
+                    if (day === 0) weekendAnchor.setDate(weekendAnchor.getDate() - 1);
+                    weekendAnchor.setHours(0, 0, 0, 0);
+                    weekendPeriods.add(weekendAnchor.toDateString());
                 }
                 currentDate.setDate(currentDate.getDate() + 1);
             }
-            return { daysLeft, weekendsLeft };
+
+            return { daysLeft, weekendsLeft: weekendPeriods.size };
         }
 
         function getCurrentCycleRange(referenceDate = new Date()) {
@@ -1422,8 +1428,8 @@
                 })
                 .reduce((sum, t) => sum + Math.abs(t.amount || 0) - (t.reimbursable || 0), 0);
 
-            const availableToSpend = state.income - totalFixed - plannedSavings - cycleSpending;
-            const savingsOccurred = plannedSavings + availableToSpend;
+            const additionalLeftover = state.income - totalFixed - plannedSavings - cycleSpending;
+            const savingsOccurred = plannedSavings + additionalLeftover;
 
             return {
                 cycleId: cycle.cycleId,
@@ -1537,8 +1543,8 @@
                         borderRadius: 6,
                         borderSkipped: false,
                         borderWidth: 0,
-                        barThickness: 16,
-                        maxBarThickness: 18
+                        barThickness: 8,
+                        maxBarThickness: 10
                     }, {
                         label: 'Savings',
                         data: cycles.map(c => c.savingsOccurred),
@@ -1546,8 +1552,8 @@
                         borderRadius: 6,
                         borderSkipped: false,
                         borderWidth: 0,
-                        barThickness: 16,
-                        maxBarThickness: 18
+                        barThickness: 8,
+                        maxBarThickness: 10
                     }]
                 },
                 options: {
@@ -1574,6 +1580,8 @@
                             }
                         },
                         legend: {
+                            position: 'bottom',
+                            align: 'center',
                             labels: {
                                 color: '#b0b0b0',
                                 font: { size: 12, weight: '600' }
@@ -1582,8 +1590,8 @@
                     },
                     datasets: {
                         bar: {
-                            categoryPercentage: 0.52,
-                            barPercentage: 0.7
+                            categoryPercentage: 0.5,
+                            barPercentage: 0.34
                         }
                     },
                     scales: {
@@ -1967,15 +1975,18 @@
             if (currentReimbursableIndex !== null) {
                 const linkedDepositIndex = document.getElementById('linkedDepositSelect').value;
                 const category = document.getElementById('categorySelect').value;
-                state.transactions[currentReimbursableIndex].category = category;
+                const targetTx = state.transactions[currentReimbursableIndex];
+                const maxReimbursable = Math.abs(targetTx.amount || 0);
+                targetTx.category = category;
+
                 if (linkedDepositIndex) {
-                    const depositAmount = state.transactions[parseInt(linkedDepositIndex)].amount;
-                    state.transactions[currentReimbursableIndex].linkedDeposit = parseInt(linkedDepositIndex);
-                    state.transactions[currentReimbursableIndex].reimbursable = depositAmount;
+                    const depositAmount = Math.max(0, state.transactions[parseInt(linkedDepositIndex)].amount || 0);
+                    targetTx.linkedDeposit = parseInt(linkedDepositIndex);
+                    targetTx.reimbursable = Math.min(maxReimbursable, depositAmount);
                 } else {
-                    const amount = parseFloat(document.getElementById('reimbursableAmountInput').value) || 0;
-                    state.transactions[currentReimbursableIndex].reimbursable = amount;
-                    state.transactions[currentReimbursableIndex].linkedDeposit = null;
+                    const manualAmount = parseFloat(document.getElementById('reimbursableAmountInput').value) || 0;
+                    targetTx.reimbursable = Math.min(maxReimbursable, Math.max(0, manualAmount));
+                    targetTx.linkedDeposit = null;
                 }
                 updateUI();
                 closeModal('reimbursableModal');
