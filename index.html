@@ -939,8 +939,8 @@
             window.URL.revokeObjectURL(url);
         }
 
-        function loadDemoData() {
-            state = {
+        function loadDemoData(preserveSettings = false) {
+            const demoState = {
                 income: 6500, savings: 1000, budgetStartDay: 4,
                 fixedExpenses: [
                     { name: 'Rent', amount: 2200 }, { name: 'Car Payment', amount: 450 },
@@ -977,6 +977,17 @@
                     { name: 'Netflix', amount: -16, date: '2025-12-14', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' }
                 ]
             };
+
+            state = preserveSettings
+                ? {
+                    ...demoState,
+                    income: state.income || demoState.income,
+                    savings: state.savings || demoState.savings,
+                    budgetStartDay: state.budgetStartDay || demoState.budgetStartDay,
+                    fixedExpenses: state.fixedExpenses.length ? state.fixedExpenses : demoState.fixedExpenses,
+                }
+                : demoState;
+
             updateUI();
         }
 
@@ -1420,12 +1431,17 @@
                         });
 
                         const exchangeData = await exchangeResponse.json();
+                        if (!exchangeResponse.ok || !exchangeData.access_token) {
+                            throw new Error(exchangeData.error || 'Failed to exchange public token');
+                        }
+
                         accessToken = exchangeData.access_token;
                         localStorage.setItem('plaid_access_token', accessToken);
                         localStorage.setItem('plaid_item_id', exchangeData.item_id);
-                        localStorage.setItem('plaid_institution', metadata.institution.name);
+                        const institutionName = metadata?.institution?.name || 'Bank account';
+                        localStorage.setItem('plaid_institution', institutionName);
                         
-                        document.getElementById('statusText').textContent = 'Connected - ' + metadata.institution.name;
+                        document.getElementById('statusText').textContent = 'Connected - ' + institutionName;
                         document.getElementById('connectionStatus').classList.add('connected');
                         document.getElementById('connectBtn').textContent = 'Reconnect Account';
                         
@@ -1450,7 +1466,7 @@
         async function fetchTransactions() {
             if (!accessToken) {
                 console.log('No access token, loading demo data');
-                loadDemoData();
+                loadDemoData(true);
                 return;
             }
 
@@ -1474,7 +1490,7 @@
                 updateUI();
             } catch (error) {
                 console.error('Error fetching transactions:', error);
-                loadDemoData();
+                loadDemoData(true);
             }
         }
 
