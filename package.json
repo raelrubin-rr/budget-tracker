@@ -1,0 +1,7 @@
+{
+  "name": "budget-tracker",
+  "version": "1.0.0",
+  "dependencies": {
+    "plaid": "^16.0.0"
+  }
+}

@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budget Tracker</title>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-tertiary: #1f1f1f;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --text-tertiary: #707070;
+            --border-color: #2a2a2a;
+            --green: #10b981;
+            --red: #ef4444;
+            --blue: #3b82f6;
+            --yellow: #f59e0b;
+            --purple: #a855f7;
+            --pink: #ec4899;
+            --orange: #f97316;
+            --cyan: #06b6d4;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            padding-bottom: 80px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            padding: 40px 0 60px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 64px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .period {
+            font-size: 16px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .menu-button {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            width: 40px;
+            height: 40px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            z-index: 100;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .menu-button span {
+            width: 24px;
+            height: 2px;
+            background: var(--text-tertiary);
+            transition: background 0.2s;
+        }
+
+        .menu-button:hover span {
+            background: var(--text-primary);
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 48px;
+            margin-bottom: 32px;
+        }
+
+        .date-info {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .current-date {
+            font-size: 18px;
+            color: var(--text-primary);
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .days-remaining {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        /* Budget Sections Grid */
+        .budget-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+
+        .budget-section {
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 32px;
+        }
+
+        .budget-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+
+        .budget-value {
+            font-size: 56px;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            line-height: 1;
+        }
+
+        .budget-value.green {
+            color: var(--green);
+        }
+
+        .budget-value.red {
+            color: var(--red);
+        }
+
+        .budget-value.purple {
+            color: var(--purple);
+        }
+
+        .budget-subtext {
+            font-size: 14px;
+            color: var(--text-tertiary);
+            margin-top: 12px;
+            font-weight: 600;
+        }
+
+        /* Progress Bar */
+        .progress-section {
+            margin: 40px 0;
+        }
+
+        .progress-label-top {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .progress-label-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 700;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 32px;
+            background: var(--bg-tertiary);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            border: 2px solid var(--border-color);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--green), var(--blue));
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .progress-fill.warning {
+            background: linear-gradient(90deg, var(--yellow), var(--orange));
+        }
+
+        .progress-fill.danger {
+            background: linear-gradient(90deg, var(--red), var(--orange));
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--text-primary);
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .divider {
+            height: 2px;
+            background: var(--border-color);
+            margin: 48px 0;
+        }
+
+        /* Charts */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+
+        .chart-card {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 40px;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            color: var(--text-primary);
+            font-weight: 800;
+            margin-bottom: 32px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .chart-container.pie {
+            height: 280px;
+        }
+
+        /* Transactions */
+        .transaction-section {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            margin-bottom: 32px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 32px 40px;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-title {
+            font-size: 18px;
+            color: var(--text-primary);
+            font-weight: 800;
+        }
+
+        .toggle-icon {
+            font-size: 20px;
+            color: var(--text-secondary);
+            font-weight: 700;
+            transition: transform 0.3s;
+        }
+
+        .toggle-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .section-content {
+            max-height: 2000px;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .section-content.collapsed {
+            max-height: 0;
+        }
+
+        .filter-bar {
+            padding: 24px 40px;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            gap: 20px;
+        }
+
+        .search-input, .filter-select {
+            flex: 1;
+            min-width: 200px;
+            padding: 16px 20px;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .search-input:focus, .filter-select:focus {
+            outline: none;
+            border-color: var(--text-primary);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .transaction-list {
+            padding: 24px 40px;
+        }
+
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 2px solid var(--border-color);
+            transition: background 0.2s;
+        }
+
+        .expense-item:last-child {
+            border-bottom: none;
+        }
+
+        .expense-item:hover {
+            background: var(--bg-tertiary);
+            margin: 0 -20px;
+            padding-left: 20px;
+            padding-right: 20px;
+            border-radius: 8px;
+        }
+
+        .transaction-clickable {
+            cursor: pointer;
+        }
+
+        .expense-name {
+            font-size: 16px;
+            color: var(--text-primary);
+            font-weight: 700;
+            flex: 1;
+        }
+
+        .expense-amount {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-left: 20px;
+        }
+
+        .expense-amount.crossed {
+            text-decoration: line-through;
+            color: var(--text-tertiary);
+            margin-right: 16px;
+            font-size: 16px;
+        }
+
+        .badge {
+            display: inline-block;
+            margin-left: 12px;
+            font-size: 18px;
+        }
+
+        .pending-badge {
+            background: var(--orange);
+            color: var(--bg-primary);
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-left: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .edit-icon {
+            font-size: 16px;
+            color: var(--text-tertiary);
+            margin-left: 16px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .expense-item:hover .edit-icon {
+            opacity: 1;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: -500px;
+            width: 500px;
+            height: 100vh;
+            background: var(--bg-primary);
+            border-left: 2px solid var(--border-color);
+            transition: right 0.4s ease;
+            z-index: 2000;
+            overflow-y: auto;
+        }
+
+        .sidebar.open {
+            right: 0;
+        }
+
+        .sidebar-header {
+            padding: 48px 40px 32px;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .close-btn {
+            font-size: 32px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .sidebar-content {
+            padding: 40px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 48px;
+        }
+
+        .sidebar-section-title {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 20px;
+            font-weight: 800;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 2px solid var(--border-color);
+            cursor: pointer;
+        }
+
+        .setting-label {
+            font-size: 16px;
+            color: var(--text-secondary);
+            font-weight: 700;
+        }
+
+        .setting-value {
+            font-size: 16px;
+            color: var(--text-primary);
+            font-weight: 800;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1999;
+            display: none;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 16px 24px;
+            border: 2px solid var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            background: var(--bg-secondary);
+            border-color: var(--text-primary);
+        }
+
+        .btn-primary {
+            background: var(--text-primary);
+            color: var(--bg-primary);
+            border-color: var(--text-primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--text-secondary);
+        }
+
+        .btn-secondary {
+            margin-top: 16px;
+        }
+
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3000;
+            padding: 40px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-primary);
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            padding: 48px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 32px;
+            color: var(--text-primary);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--text-primary);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 16px;
+            margin-top: 32px;
+        }
+
+        .btn-group .btn {
+            flex: 1;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 0;
+            color: var(--text-tertiary);
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 48px;
+            }
+            .budget-grid {
+                grid-template-columns: 1fr;
+            }
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="menu-button" onclick="toggleSidebar()">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">Settings</div>
+            <button class="close-btn" onclick="toggleSidebar()">×</button>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Budget</div>
+                <div class="setting-item" onclick="openIncomeModal()">
+                    <span class="setting-label">Monthly Income</span>
+                    <span class="setting-value" id="sidebarIncome">$0</span>
+                </div>
+                <div class="setting-item" onclick="openSavingsModal()">
+                    <span class="setting-label">Savings Goal</span>
+                    <span class="setting-value" id="sidebarSavings">$0</span>
+                </div>
+                <div class="setting-item" onclick="openBudgetPeriodModal()">
+                    <span class="setting-label">Period Start</span>
+                    <span class="setting-value" id="sidebarPeriod">4th</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Fixed Expenses</div>
+                <div id="sidebarFixedList"></div>
+                <button class="btn btn-secondary" onclick="openFixedModal()">Add Expense</button>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Connection</div>
+                <button class="btn btn-primary" onclick="connectPlaid()">Connect Account</button>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Export</div>
+                <button class="btn btn-secondary" onclick="exportToCSV(); toggleSidebar();">Download CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Budget</h1>
+            <div class="period" id="budgetPeriod">Jan 4 – Feb 4, 2026</div>
+        </header>
+
+        <div class="card">
+            <div class="date-info">
+                <div class="current-date" id="currentDate">Saturday, Feb 14, 2026</div>
+                <div class="days-remaining" id="daysRemaining">18 days • 2 weekends</div>
+            </div>
+
+            <div class="budget-section">
+                <div class="budget-label">Available to Spend</div>
+                <div class="budget-value green" id="availableAmount">$0</div>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid var(--border-color);">
+                    <div style="font-size: 28px; font-weight: 800; color: var(--purple);" id="weekendBudget">$0</div>
+                    <div style="font-size: 13px; color: var(--text-tertiary); margin-top: 4px; font-weight: 600;" id="weekendText">per weekend</div>
+                </div>
+            </div>
+
+            <div class="progress-section">
+                <div class="progress-label-top">
+                    <span class="progress-label-text">Budget Usage</span>
+                    <span class="progress-label-text" id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="budgetProgress" style="width: 0%"></div>
+                    <div class="progress-text" id="budgetProgressText">$0 of $0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-title">Monthly Spending Comparison</div>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-title">Category Breakdown</div>
+                <div class="chart-container pie">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="transaction-section">
+            <div class="section-header" onclick="toggleSection('creditContent', 'creditToggle')">
+                <div class="section-title">💳 Credit Card</div>
+                <span class="toggle-icon" id="creditToggle">▼</span>
+            </div>
+            <div class="section-content" id="creditContent">
+                <div class="filter-bar">
+                    <input type="text" class="search-input" id="creditSearch" placeholder="Search transactions..." onkeyup="filterTransactions('credit')">
+                    <select class="filter-select" id="creditCategoryFilter" onchange="filterTransactions('credit')">
+                        <option value="">All Categories</option>
+                        <option value="groceries">🛒 Groceries</option>
+                        <option value="dining">🍽️ Dining</option>
+                        <option value="transportation">🚗 Transportation</option>
+                        <option value="entertainment">🎬 Entertainment</option>
+                        <option value="shopping">🛍️ Shopping</option>
+                        <option value="subscription">📱 Subscription</option>
+                        <option value="other">📦 Other</option>
+                    </select>
+                </div>
+                <div class="transaction-list" id="creditList"></div>
+            </div>
+        </div>
+
+        <div class="transaction-section">
+            <div class="section-header" onclick="toggleSection('checkingContent', 'checkingToggle')">
+                <div class="section-title">🏦 Checking Account</div>
+                <span class="toggle-icon" id="checkingToggle">▼</span>
+            </div>
+            <div class="section-content" id="checkingContent">
+                <div class="filter-bar">
+                    <input type="text" class="search-input" id="checkingSearch" placeholder="Search transactions..." onkeyup="filterTransactions('checking')">
+                </div>
+                <div class="transaction-list" id="checkingList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals (same as before) -->
+    <div class="modal" id="incomeModal">
+        <div class="modal-content">
+            <div class="modal-header">Monthly Income</div>
+            <div class="form-group">
+                <label class="form-label">Amount</label>
+                <input type="number" class="form-input" id="incomeInput" placeholder="5000">
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="closeModal('incomeModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveIncome()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="savingsModal">
+        <div class="modal-content">
+            <div class="modal-header">Savings Goal</div>
+            <div class="form-group">
+                <label class="form-label">Monthly Target</label>
+                <input type="number" class="form-input" id="savingsInput" placeholder="1000">
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="closeModal('savingsModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSavings()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="fixedModal">
+        <div class="modal-content">
+            <div class="modal-header">Fixed Expense</div>
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-input" id="fixedNameInput" placeholder="Rent">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Amount</label>
+                <input type="number" class="form-input" id="fixedAmountInput" placeholder="1500">
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="closeModal('fixedModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveFixedExpense()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="budgetPeriodModal">
+        <div class="modal-content">
+            <div class="modal-header">Budget Period</div>
+            <div class="form-group">
+                <label class="form-label">Start Day (1-28)</label>
+                <input type="number" class="form-input" id="budgetDayInput" placeholder="4" min="1" max="28">
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="closeModal('budgetPeriodModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveBudgetPeriod()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="reimbursableModal">
+        <div class="modal-content">
+            <div class="modal-header">Transaction Details</div>
+            <div class="form-group">
+                <label class="form-label">Transaction</label>
+                <div id="reimbursableTransactionName" style="font-size: 16px; padding: 16px; background: var(--bg-secondary); border: 2px solid var(--border-color); color: var(--text-primary); font-weight: 700; border-radius: 8px;"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select class="form-select" id="categorySelect">
+                    <option value="groceries">🛒 Groceries</option>
+                    <option value="dining">🍽️ Dining</option>
+                    <option value="transportation">🚗 Transportation</option>
+                    <option value="entertainment">🎬 Entertainment</option>
+                    <option value="shopping">🛍️ Shopping</option>
+                    <option value="subscription">📱 Subscription</option>
+                    <option value="other">📦 Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Link Deposit</label>
+                <select class="form-select" id="linkedDepositSelect">
+                    <option value="">None</option>
+                </select>
+            </div>
+            <div class="form-group" id="manualAmountGroup">
+                <label class="form-label">Manual Reimbursement</label>
+                <input type="number" class="form-input" id="reimbursableAmountInput" placeholder="0.00" step="0.01">
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="closeModal('reimbursableModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveReimbursable()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], connectedAccount: null };
+        let currentReimbursableIndex = null;
+        let trendChart = null;
+        let categoryChart = null;
+
+        const CATEGORIES = {
+            groceries: ['whole foods', 'trader joes', 'safeway', 'kroger', 'walmart', 'target', 'costco', 'grocery'],
+            dining: ['restaurant', 'cafe', 'coffee', 'starbucks', 'chipotle', 'mcdonalds', 'pizza', 'sushi', 'bar', 'bistro', 'grill', 'kitchen', 'diner', 'tavern', 'mastros'],
+            transportation: ['gas', 'shell', 'chevron', 'uber', 'lyft', 'parking', 'metro', 'transit'],
+            entertainment: ['movie', 'amc', 'netflix', 'spotify', 'hulu', 'disney', 'theater', 'concert', 'tickets'],
+            shopping: ['amazon', 'ebay', 'etsy', 'mall', 'store', 'shop', 'target'],
+            subscription: ['subscription', 'prime', 'pro', 'plus', 'premium', 'membership', 'spotify', 'netflix']
+        };
+
+        function autoCategorize(name) {
+            const n = name.toLowerCase();
+            for (const [cat, keywords] of Object.entries(CATEGORIES)) {
+                if (keywords.some(k => n.includes(k))) return cat;
+            }
+            return 'other';
+        }
+
+        function detectRecurring(txs) {
+            const recurring = new Set();
+            const names = {};
+            txs.forEach(tx => {
+                const name = tx.name.toLowerCase().replace(/[0-9]/g, '').trim();
+                if (!names[name]) names[name] = [];
+                names[name].push(tx);
+            });
+            Object.entries(names).forEach(([name, txs]) => {
+                if (txs.length >= 2) {
+                    const dates = txs.map(t => new Date(t.date)).sort((a, b) => a - b);
+                    for (let i = 1; i < dates.length; i++) {
+                        const daysDiff = (dates[i] - dates[i-1]) / (1000 * 60 * 60 * 24);
+                        if (daysDiff >= 25 && daysDiff <= 35) {
+                            txs.forEach(t => recurring.add(t.name));
+                            break;
+                        }
+                    }
+                }
+            });
+            return recurring;
+        }
+
+        function exportToCSV() {
+            const headers = ['Date', 'Name', 'Category', 'Amount', 'Account', 'Pending', 'Reimbursable', 'Recurring'];
+            const rows = [headers];
+            const recurringNames = detectRecurring(state.transactions);
+            state.transactions.forEach(tx => {
+                const category = tx.category || autoCategorize(tx.name);
+                const isRecurring = recurringNames.has(tx.name);
+                rows.push([tx.date, tx.name, category, tx.amount, tx.account, tx.pending ? 'Yes' : 'No', tx.reimbursable || 0, isRecurring ? 'Yes' : 'No']);
+            });
+            const csvContent = rows.map(row => row.join(',')).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `budget-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        function loadDemoData() {
+            state = {
+                income: 6500, savings: 1000, budgetStartDay: 4,
+                fixedExpenses: [
+                    { name: 'Rent', amount: 2200 }, { name: 'Car Payment', amount: 450 },
+                    { name: 'Insurance', amount: 180 }, { name: 'Utilities', amount: 120 }, { name: 'Subscriptions', amount: 85 }
+                ],
+                transactions: [
+                    { name: 'Paycheck Deposit', amount: 3250, date: '2026-02-14', pending: false, account: 'checking', category: 'other' },
+                    { name: 'Paycheck Deposit', amount: 3250, date: '2026-01-31', pending: false, account: 'checking', category: 'other' },
+                    { name: 'Venmo from Sarah', amount: 45, date: '2026-02-12', pending: false, account: 'checking', category: 'other' },
+                    { name: 'Venmo from Mike', amount: 39, date: '2026-02-12', pending: false, account: 'checking', category: 'other' },
+                    { name: 'Venmo from Jessica', amount: 62, date: '2026-02-09', pending: false, account: 'checking', category: 'other' },
+                    { name: 'Whole Foods', amount: -87, date: '2026-02-13', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
+                    { name: 'Shell Gas Station', amount: -52, date: '2026-02-12', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
+                    { name: 'Target', amount: -125, date: '2026-02-11', pending: true, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'shopping' },
+                    { name: 'Dinner at Mastros', amount: -187, date: '2026-02-10', pending: false, account: 'credit', reimbursable: 84, linkedDeposit: 3, category: 'dining' },
+                    { name: 'Starbucks', amount: -7, date: '2026-02-10', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
+                    { name: 'Uber Eats', amount: -38, date: '2026-02-09', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
+                    { name: 'Amazon Prime', amount: -15, date: '2026-02-09', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Movie Tickets AMC', amount: -44, date: '2026-02-08', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'entertainment' },
+                    { name: 'Chipotle', amount: -14, date: '2026-02-08', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
+                    { name: 'Drinks at Bar 54', amount: -89, date: '2026-02-07', pending: false, account: 'credit', reimbursable: 62, linkedDeposit: 4, category: 'dining' },
+                    { name: 'Trader Joes', amount: -68, date: '2026-02-06', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
+                    { name: 'CVS Pharmacy', amount: -23, date: '2026-02-05', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'other' },
+                    { name: 'Spotify Premium', amount: -11, date: '2026-02-04', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Whole Foods', amount: -92, date: '2026-01-27', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
+                    { name: 'Shell Gas Station', amount: -48, date: '2026-01-24', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
+                    { name: 'Dinner at Nobu', amount: -156, date: '2026-01-20', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
+                    { name: 'Target', amount: -89, date: '2026-01-18', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'shopping' },
+                    { name: 'Netflix', amount: -16, date: '2026-01-14', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Amazon Prime', amount: -15, date: '2026-01-09', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Spotify Premium', amount: -11, date: '2026-01-04', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
+                    { name: 'Whole Foods', amount: -78, date: '2025-12-28', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
+                    { name: 'Shell Gas Station', amount: -55, date: '2025-12-22', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
+                    { name: 'Netflix', amount: -16, date: '2025-12-14', pending: false, account: 'credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' }
+                ]
+            };
+            updateUI();
+        }
+
+        function getBudgetPeriod() {
+            const today = new Date();
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+            const startDay = state.budgetStartDay || 4;
+            let startDate, endDate;
+            if (today.getDate() >= startDay) {
+                startDate = new Date(currentYear, currentMonth, startDay);
+                endDate = new Date(currentYear, currentMonth + 1, startDay);
+            } else {
+                startDate = new Date(currentYear, currentMonth - 1, startDay);
+                endDate = new Date(currentYear, currentMonth, startDay);
+            }
+            const options = { month: 'short', day: 'numeric' };
+            return `${startDate.toLocaleDateString('en-US', options)} – ${endDate.toLocaleDateString('en-US', options)}`;
+        }
+
+        function getCurrentDate() {
+            return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        }
+
+        function getDaysRemaining() {
+            const today = new Date();
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+            const startDay = state.budgetStartDay || 4;
+            let endDate;
+            if (today.getDate() >= startDay) {
+                endDate = new Date(currentYear, currentMonth + 1, startDay);
+            } else {
+                endDate = new Date(currentYear, currentMonth, startDay);
+            }
+            const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+            let weekendsLeft = 0;
+            let currentDate = new Date(today);
+            const weekendsCounted = new Set();
+            while (currentDate <= endDate) {
+                if (currentDate.getDay() === 6) {
+                    const weekendKey = currentDate.toDateString();
+                    if (!weekendsCounted.has(weekendKey)) {
+                        weekendsLeft++;
+                        weekendsCounted.add(weekendKey);
+                    }
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            return { daysLeft, weekendsLeft };
+        }
+
+        function updateTrendChart() {
+            const ctx = document.getElementById('trendChart');
+            if (!ctx) return;
+            
+            const months = [];
+            const today = new Date();
+            
+            for (let i = 2; i >= 0; i--) {
+                const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+                const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+                
+                const monthSpending = state.transactions
+                    .filter(t => t.amount < 0 && t.account === 'credit')
+                    .filter(t => {
+                        const txDate = new Date(t.date);
+                        return txDate >= monthStart && txDate <= monthEnd;
+                    })
+                    .reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0);
+                
+                const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
+                const isCurrent = i === 0;
+                months.push({ label: monthName + (isCurrent ? ' (Current)' : ''), value: Math.round(monthSpending), isCurrent });
+            }
+            
+            if (trendChart) trendChart.destroy();
+            
+            trendChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: months.map(m => m.label),
+                    datasets: [{
+                        data: months.map(m => m.value),
+                        backgroundColor: months.map(m => m.isCurrent ? '#10b981' : '#3b82f6'),
+                        borderRadius: 8,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1f1f1f',
+                            titleColor: '#ffffff',
+                            bodyColor: '#b0b0b0',
+                            borderColor: '#2a2a2a',
+                            borderWidth: 2,
+                            padding: 12,
+                            titleFont: { size: 14, weight: '700' },
+                            bodyFont: { size: 13, weight: '600' },
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Spent: $' + context.parsed.y.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#707070',
+                                font: { size: 12, weight: '700' },
+                                callback: function(value) {
+                                    return '$' + value;
+                                }
+                            },
+                            grid: { color: '#2a2a2a', drawBorder: false }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#b0b0b0',
+                                font: { size: 13, weight: '700' }
+                            },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCategoryChart() {
+            const ctx = document.getElementById('categoryChart');
+            if (!ctx) return;
+            
+            const categoryTotals = {};
+            state.transactions
+                .filter(t => t.amount < 0 && t.account === 'credit')
+                .forEach(t => {
+                    const category = t.category || autoCategorize(t.name);
+                    const amount = Math.abs(t.amount) - (t.reimbursable || 0);
+                    categoryTotals[category] = (categoryTotals[category] || 0) + amount;
+                });
+            
+            const labels = Object.keys(categoryTotals);
+            const data = Object.values(categoryTotals);
+            const colors = {
+                groceries: '#10b981',
+                dining: '#f59e0b',
+                transportation: '#3b82f6',
+                entertainment: '#a855f7',
+                shopping: '#ec4899',
+                subscription: '#06b6d4',
+                other: '#6b7280'
+            };
+            
+            if (categoryChart) categoryChart.destroy();
+            
+            categoryChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                    datasets: [{
+                        data: data,
+                        backgroundColor: labels.map(l => colors[l] || colors.other),
+                        borderWidth: 3,
+                        borderColor: '#0a0a0a'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#b0b0b0',
+                                padding: 16,
+                                font: { size: 13, weight: '700' },
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1f1f1f',
+                            titleColor: '#ffffff',
+                            bodyColor: '#b0b0b0',
+                            borderColor: '#2a2a2a',
+                            borderWidth: 2,
+                            padding: 12,
+                            titleFont: { size: 14, weight: '700' },
+                            bodyFont: { size: 13, weight: '600' },
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': $' + Math.round(context.parsed).toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('budgetPeriod').textContent = getBudgetPeriod();
+            document.getElementById('currentDate').textContent = getCurrentDate();
+            
+            const { daysLeft, weekendsLeft } = getDaysRemaining();
+            document.getElementById('daysRemaining').textContent = `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} • ${weekendsLeft} ${weekendsLeft === 1 ? 'weekend' : 'weekends'}`;
+            
+            const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
+            const variableSpent = Math.round(state.transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0));
+            const available = state.income - totalFixed - state.savings - variableSpent;
+            const budgetTotal = state.income - totalFixed - state.savings;
+            const percentUsed = budgetTotal > 0 ? (variableSpent / budgetTotal) * 100 : 0;
+            
+            document.getElementById('spentAmount').textContent = `$${variableSpent.toLocaleString()}`;
+            document.getElementById('availableAmount').textContent = `$${Math.round(available).toLocaleString()}`;
+            
+            const weekendBudget = weekendsLeft > 0 ? Math.round(available / weekendsLeft) : 0;
+            document.getElementById('weekendBudget').textContent = `$${weekendBudget.toLocaleString()}`;
+            document.getElementById('weekendText').textContent = `per ${weekendsLeft} ${weekendsLeft === 1 ? 'weekend' : 'weekends'} remaining (${weekendsLeft} left)`;
+            
+            const progressBar = document.getElementById('budgetProgress');
+            progressBar.style.width = Math.min(percentUsed, 100) + '%';
+            progressBar.className = 'progress-fill';
+            if (percentUsed >= 90) progressBar.classList.add('danger');
+            else if (percentUsed >= 70) progressBar.classList.add('warning');
+            
+            document.getElementById('progressPercent').textContent = Math.round(percentUsed) + '%';
+            document.getElementById('budgetProgressText').textContent = `$${variableSpent.toLocaleString()} of $${budgetTotal.toLocaleString()}`;
+            
+            document.getElementById('sidebarIncome').textContent = `$${Math.round(state.income).toLocaleString()}`;
+            document.getElementById('sidebarSavings').textContent = `$${Math.round(state.savings).toLocaleString()}`;
+            document.getElementById('sidebarPeriod').textContent = `${state.budgetStartDay}${getOrdinalSuffix(state.budgetStartDay)}`;
+            
+            const sidebarFixedList = document.getElementById('sidebarFixedList');
+            if (state.fixedExpenses.length > 0) {
+                sidebarFixedList.innerHTML = state.fixedExpenses.map(exp => `
+                    <div class="setting-item">
+                        <span class="setting-label">${exp.name}</span>
+                        <span class="setting-value">$${Math.round(exp.amount).toLocaleString()}</span>
+                    </div>
+                `).join('');
+            } else {
+                sidebarFixedList.innerHTML = '<div class="empty-state">No expenses</div>';
+            }
+            
+            updateTransactions();
+            updateTrendChart();
+            updateCategoryChart();
+        }
+
+        function updateTransactions() {
+            const checkingTx = state.transactions.filter(t => t.account === 'checking');
+            const creditTx = state.transactions.filter(t => t.account === 'credit');
+            const recurringNames = detectRecurring(state.transactions);
+            updateTransactionList('checking', checkingTx, recurringNames);
+            updateTransactionList('credit', creditTx, recurringNames);
+        }
+
+        function updateTransactionList(account, transactions, recurringNames) {
+            const listId = account === 'checking' ? 'checkingList' : 'creditList';
+            const list = document.getElementById(listId);
+            
+            if (transactions.length === 0) {
+                list.innerHTML = '<div class="empty-state">No transactions</div>';
+                return;
+            }
+            
+            list.innerHTML = transactions.map(tx => {
+                const actualIndex = state.transactions.findIndex(t => t.name === tx.name && t.date === tx.date && t.amount === tx.amount);
+                const isPositive = tx.amount > 0;
+                const isLinked = state.transactions.some(t => t.linkedDeposit === actualIndex);
+                const linkedDeposit = tx.linkedDeposit !== null && tx.linkedDeposit !== undefined ? state.transactions[tx.linkedDeposit] : null;
+                const isRecurring = recurringNames.has(tx.name);
+                const hasReimbursement = tx.reimbursable && tx.reimbursable > 0;
+                
+                const recurringIcon = isRecurring ? '<span class="badge">🔁</span>' : '';
+                const linkedIcon = (linkedDeposit || isLinked) ? '<span class="badge">🔗</span>' : '';
+                const pendingBadge = tx.pending ? '<span class="pending-badge">Pending</span>' : '';
+                
+                let amountDisplay = '';
+                if (hasReimbursement) {
+                    const originalAmount = Math.abs(tx.amount);
+                    const netAmount = originalAmount - tx.reimbursable;
+                    amountDisplay = `
+                        <span class="expense-amount crossed">$${Math.round(originalAmount).toLocaleString()}</span>
+                        <span class="expense-amount">$${Math.round(netAmount).toLocaleString()}</span>
+                    `;
+                } else {
+                    amountDisplay = `<span class="expense-amount" style="color: ${isPositive ? 'var(--green)' : 'var(--text-primary)'}">${isPositive ? '+' : ''}$${Math.round(Math.abs(tx.amount)).toLocaleString()}</span>`;
+                }
+                
+                return `
+                    <div class="expense-item ${account === 'credit' ? 'transaction-clickable' : ''}" ${account === 'credit' ? `onclick="openReimbursableModal(${actualIndex})"` : ''}>
+                        <span class="expense-name">
+                            ${tx.name}
+                            ${recurringIcon}
+                            ${linkedIcon}
+                            ${pendingBadge}
+                            ${account === 'credit' ? '<span class="edit-icon">✎</span>' : ''}
+                        </span>
+                        ${amountDisplay}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterTransactions(account) {
+            const searchId = account === 'checking' ? 'checkingSearch' : 'creditSearch';
+            const searchTerm = document.getElementById(searchId).value.toLowerCase();
+            let transactions = state.transactions.filter(t => t.account === account);
+            if (searchTerm) {
+                transactions = transactions.filter(t => t.name.toLowerCase().includes(searchTerm) || (t.category && t.category.toLowerCase().includes(searchTerm)));
+            }
+            if (account === 'credit') {
+                const categoryFilter = document.getElementById('creditCategoryFilter').value;
+                if (categoryFilter) {
+                    transactions = transactions.filter(t => {
+                        const category = t.category || autoCategorize(t.name);
+                        return category === categoryFilter;
+                    });
+                }
+            }
+            const recurringNames = detectRecurring(state.transactions);
+            updateTransactionList(account, transactions, recurringNames);
+        }
+
+        function getOrdinalSuffix(num) {
+            const j = num % 10, k = num % 100;
+            if (j === 1 && k !== 11) return 'st';
+            if (j === 2 && k !== 12) return 'nd';
+            if (j === 3 && k !== 13) return 'rd';
+            return 'th';
+        }
+
+        function openIncomeModal() { document.getElementById('incomeInput').value = state.income || ''; document.getElementById('incomeModal').classList.add('active'); toggleSidebar(); }
+        function openSavingsModal() { document.getElementById('savingsInput').value = state.savings || ''; document.getElementById('savingsModal').classList.add('active'); toggleSidebar(); }
+        function openFixedModal() { document.getElementById('fixedNameInput').value = ''; document.getElementById('fixedAmountInput').value = ''; document.getElementById('fixedModal').classList.add('active'); if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar(); }
+        function openBudgetPeriodModal() { document.getElementById('budgetDayInput').value = state.budgetStartDay || 4; document.getElementById('budgetPeriodModal').classList.add('active'); toggleSidebar(); }
+
+        function openReimbursableModal(index) {
+            currentReimbursableIndex = index;
+            const tx = state.transactions[index];
+            document.getElementById('reimbursableTransactionName').textContent = `${tx.name} – $${Math.round(Math.abs(tx.amount)).toLocaleString()}`;
+            document.getElementById('categorySelect').value = tx.category || autoCategorize(tx.name);
+            const depositSelect = document.getElementById('linkedDepositSelect');
+            const checkingDeposits = state.transactions.map((t, idx) => ({ ...t, originalIndex: idx })).filter(t => t.account === 'checking' && t.amount > 0);
+            depositSelect.innerHTML = '<option value="">None</option>' + checkingDeposits.map(dep => `<option value="${dep.originalIndex}">${dep.name} – $${Math.round(dep.amount).toLocaleString()}</option>`).join('');
+            if (tx.linkedDeposit !== null && tx.linkedDeposit !== undefined) {
+                depositSelect.value = tx.linkedDeposit;
+                document.getElementById('reimbursableAmountInput').value = '';
+                document.getElementById('manualAmountGroup').style.display = 'none';
+            } else {
+                depositSelect.value = '';
+                document.getElementById('reimbursableAmountInput').value = tx.reimbursable || '';
+                document.getElementById('manualAmountGroup').style.display = 'block';
+            }
+            depositSelect.onchange = function() {
+                document.getElementById('manualAmountGroup').style.display = this.value ? 'none' : 'block';
+            };
+            document.getElementById('reimbursableModal').classList.add('active');
+        }
+
+        function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
+        function saveIncome() { const value = parseFloat(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); closeModal('incomeModal'); } }
+        function saveSavings() { const value = parseFloat(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); closeModal('savingsModal'); } }
+        function saveFixedExpense() { const name = document.getElementById('fixedNameInput').value; const amount = parseFloat(document.getElementById('fixedAmountInput').value); if (name && amount > 0) { state.fixedExpenses.push({ name, amount }); updateUI(); closeModal('fixedModal'); } }
+        function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 28) { state.budgetStartDay = day; updateUI(); closeModal('budgetPeriodModal'); } }
+
+        function saveReimbursable() {
+            if (currentReimbursableIndex !== null) {
+                const linkedDepositIndex = document.getElementById('linkedDepositSelect').value;
+                const category = document.getElementById('categorySelect').value;
+                state.transactions[currentReimbursableIndex].category = category;
+                if (linkedDepositIndex) {
+                    const depositAmount = state.transactions[parseInt(linkedDepositIndex)].amount;
+                    state.transactions[currentReimbursableIndex].linkedDeposit = parseInt(linkedDepositIndex);
+                    state.transactions[currentReimbursableIndex].reimbursable = depositAmount;
+                } else {
+                    const amount = parseFloat(document.getElementById('reimbursableAmountInput').value) || 0;
+                    state.transactions[currentReimbursableIndex].reimbursable = amount;
+                    state.transactions[currentReimbursableIndex].linkedDeposit = null;
+                }
+                updateUI();
+                closeModal('reimbursableModal');
+                currentReimbursableIndex = null;
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            } else {
+                sidebar.classList.add('open');
+                overlay.classList.add('active');
+            }
+        }
+
+        function toggleSection(contentId, toggleId) {
+            const content = document.getElementById(contentId);
+            const toggle = document.getElementById(toggleId);
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                toggle.classList.remove('collapsed');
+            } else {
+                content.classList.add('collapsed');
+                toggle.classList.add('collapsed');
+            }
+        }
+
+        // Plaid Integration
+        let plaidHandler = null;
+        let accessToken = localStorage.getItem('plaid_access_token');
+
+        async function connectPlaid() {
+            try {
+                const response = await fetch('/api/create-link-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+
+                if (!response.ok) throw new Error('Failed to create link token');
+                const data = await response.json();
+                
+                plaidHandler = Plaid.create({
+                    token: data.link_token,
+                    onSuccess: async (public_token, metadata) => {
+                        const exchangeResponse = await fetch('/api/exchange-token', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ public_token }),
+                        });
+
+                        const exchangeData = await exchangeResponse.json();
+                        accessToken = exchangeData.access_token;
+                        localStorage.setItem('plaid_access_token', accessToken);
+                        localStorage.setItem('plaid_item_id', exchangeData.item_id);
+                        localStorage.setItem('plaid_institution', metadata.institution.name);
+                        
+                        document.getElementById('statusText').textContent = 'Connected - ' + metadata.institution.name;
+                        document.getElementById('connectionStatus').classList.add('connected');
+                        document.getElementById('connectBtn').textContent = 'Reconnect Account';
+                        
+                        await fetchTransactions();
+                        toggleSidebar();
+                    },
+                    onExit: (err, metadata) => {
+                        if (err != null) {
+                            console.error('Plaid Link error:', err);
+                            alert('Connection failed. Please try again.');
+                        }
+                    },
+                });
+
+                plaidHandler.open();
+            } catch (error) {
+                console.error('Error connecting to Plaid:', error);
+                alert('Failed to connect. Please check your setup and try again.');
+            }
+        }
+
+        async function fetchTransactions() {
+            if (!accessToken) {
+                console.log('No access token, loading demo data');
+                loadDemoData();
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/get-transactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ access_token: accessToken }),
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch transactions');
+                const data = await response.json();
+                
+                state.transactions = data.transactions;
+                state.transactions.forEach(tx => {
+                    if (!tx.category || tx.category === 'other') {
+                        tx.category = autoCategorize(tx.name);
+                    }
+                });
+                
+                updateUI();
+            } catch (error) {
+                console.error('Error fetching transactions:', error);
+                loadDemoData();
+            }
+        }
+
+        function checkConnection() {
+            const institution = localStorage.getItem('plaid_institution');
+            if (accessToken && institution) {
+                document.getElementById('statusText').textContent = 'Connected - ' + institution;
+                document.getElementById('connectionStatus').classList.add('connected');
+                document.getElementById('connectBtn').textContent = 'Reconnect Account';
+                fetchTransactions();
+            } else {
+                loadDemoData();
+            }
+        }
+
+        checkConnection();
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.remove('active');
+            });
+        });
+    </script>
+</body>
+</html>
