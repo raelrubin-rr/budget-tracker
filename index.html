@@ -1120,10 +1120,13 @@
 
                     const startX = arc.x + cos * radius;
                     const startY = arc.y + sin * radius;
-                    const elbowX = arc.x + cos * (radius + 22);
-                    const elbowY = arc.y + sin * (radius + 18);
+                    const elbowX = arc.x + cos * (radius + 20);
+                    const elbowY = arc.y + sin * (radius + 16);
                     const rightSide = cos >= 0;
-                    const endX = elbowX + (rightSide ? sideOffset : -sideOffset);
+                    const minLabelAnchorX = arc.x + (rightSide ? radius + 34 : -(radius + 34));
+                    const endX = rightSide
+                        ? Math.max(elbowX + sideOffset, minLabelAnchorX)
+                        : Math.min(elbowX - sideOffset, minLabelAnchorX);
                     const labelPayload = {
                         index,
                         raw,
@@ -1477,6 +1480,8 @@
 
             recordBillingHistory();
             const cycles = getTrendCycles();
+            const trendMaxValue = Math.max(0, ...cycles.flatMap(c => [c.expenses, c.savingsOccurred]));
+            const yAxisHeadroom = Math.max(500, Math.ceil((trendMaxValue * 1.18) / 100) * 100);
 
             if (trendChart) trendChart.destroy();
 
@@ -1541,6 +1546,7 @@
                     scales: {
                         y: {
                             beginAtZero: true,
+                            suggestedMax: yAxisHeadroom,
                             ticks: {
                                 color: '#707070',
                                 font: { size: 12, weight: '700' },
