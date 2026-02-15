@@ -1453,9 +1453,10 @@
             id: 'barValueLabelPlugin',
             afterDatasetsDraw(chart) {
                 const { ctx } = chart;
+                const placedLabels = [];
                 ctx.save();
                 ctx.fillStyle = '#d1d5db';
-                ctx.font = '700 11px Inter, sans-serif';
+                ctx.font = '600 9px Inter, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
 
@@ -1464,9 +1465,30 @@
                     meta.data.forEach((bar, index) => {
                         const value = Number(dataset.data[index] || 0);
                         if (!value) return;
-                        const chartTop = chart.chartArea.top + 12;
-                        const y = value >= 0 ? Math.max(chartTop, bar.y - 8) : bar.y + 14;
-                        ctx.fillText(`$${Math.round(value).toLocaleString()}`, bar.x, y);
+
+                        const text = `$${Math.round(value).toLocaleString()}`;
+                        const textWidth = ctx.measureText(text).width;
+                        const chartTop = chart.chartArea.top + 18;
+                        const chartBottom = chart.chartArea.bottom - 8;
+                        const direction = value >= 0 ? -1 : 1;
+
+                        let x = bar.x + (datasetIndex === 0 ? -7 : 7);
+                        let y = value >= 0 ? Math.max(chartTop, bar.y - 8) : Math.min(chartBottom, bar.y + 12);
+
+                        for (let guard = 0; guard < 8; guard++) {
+                            const collision = placedLabels.find(label => (
+                                Math.abs(label.x - x) < (label.width + textWidth) / 2 + 4
+                                && Math.abs(label.y - y) < 11
+                            ));
+                            if (!collision) break;
+
+                            y += direction * 11;
+                            if (direction < 0) y = Math.max(chartTop, y);
+                            else y = Math.min(chartBottom, y);
+                        }
+
+                        placedLabels.push({ x, y, width: textWidth });
+                        ctx.fillText(text, x, y);
                     });
                 });
 
@@ -1496,7 +1518,8 @@
                         borderRadius: 6,
                         borderSkipped: false,
                         borderWidth: 0,
-                        barThickness: 20
+                        barThickness: 16,
+                        maxBarThickness: 18
                     }, {
                         label: 'Savings',
                         data: cycles.map(c => c.savingsOccurred),
@@ -1504,14 +1527,15 @@
                         borderRadius: 6,
                         borderSkipped: false,
                         borderWidth: 0,
-                        barThickness: 20
+                        barThickness: 16,
+                        maxBarThickness: 18
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     layout: {
-                        padding: { top: 8, right: 10, left: 4, bottom: 4 }
+                        padding: { top: 22, right: 10, left: 4, bottom: 4 }
                     },
                     plugins: {
                         tooltip: {
@@ -1539,8 +1563,8 @@
                     },
                     datasets: {
                         bar: {
-                            categoryPercentage: 0.62,
-                            barPercentage: 0.78
+                            categoryPercentage: 0.52,
+                            barPercentage: 0.7
                         }
                     },
                     scales: {
