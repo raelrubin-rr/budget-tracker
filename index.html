@@ -554,6 +554,18 @@
             font-weight: 800;
         }
 
+        .fixed-expense-meta {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .fixed-expense-value {
+            min-width: 110px;
+            text-align: right;
+        }
+
         .setting-item.connected .setting-value {
             color: var(--green);
         }
@@ -973,6 +985,58 @@
             subscription: ['subscription', 'prime', 'pro', 'plus', 'premium', 'membership', 'spotify', 'netflix']
         };
 
+
+        const donutCategoryLabelPlugin = {
+            id: 'donutCategoryLabelPlugin',
+            afterDatasetsDraw(chart) {
+                const dataset = chart.data.datasets[0];
+                const meta = chart.getDatasetMeta(0);
+                if (!dataset || !meta?.data?.length) return;
+
+                const total = dataset.data.reduce((sum, val) => sum + val, 0);
+                if (!total) return;
+
+                const { ctx } = chart;
+                ctx.save();
+                ctx.font = '600 11px Inter, sans-serif';
+                ctx.fillStyle = '#d1d5db';
+                ctx.strokeStyle = 'rgba(209, 213, 219, 0.55)';
+                ctx.lineWidth = 1.2;
+
+                meta.data.forEach((arc, index) => {
+                    const raw = dataset.data[index];
+                    if (!raw) return;
+
+                    const angle = (arc.startAngle + arc.endAngle) / 2;
+                    const cos = Math.cos(angle);
+                    const sin = Math.sin(angle);
+                    const radius = arc.outerRadius;
+
+                    const startX = arc.x + cos * radius;
+                    const startY = arc.y + sin * radius;
+                    const elbowX = arc.x + cos * (radius + 14);
+                    const elbowY = arc.y + sin * (radius + 14);
+                    const rightSide = cos >= 0;
+                    const endX = elbowX + (rightSide ? 18 : -18);
+
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(elbowX, elbowY);
+                    ctx.lineTo(endX, elbowY);
+                    ctx.stroke();
+
+                    const pct = Math.round((raw / total) * 100);
+                    const label = chart.data.labels[index];
+                    const text = `${pct}% ${label}`;
+                    ctx.textAlign = rightSide ? 'left' : 'right';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(text, endX + (rightSide ? 5 : -5), elbowY);
+                });
+
+                ctx.restore();
+            }
+        };
+
         function autoCategorize(name) {
             const n = name.toLowerCase();
             for (const [cat, keywords] of Object.entries(CATEGORIES)) {
@@ -993,7 +1057,7 @@
                 if (txs.length >= 2) {
                     const dates = txs.map(t => new Date(t.date)).sort((a, b) => a - b);
                     for (let i = 1; i < dates.length; i++) {
-                        const daysDiff = (dates[i] - dates[i-1]) / (1000 * 60 * 60 * 24);
+                        const daysDiff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24);
                         if (daysDiff >= 25 && daysDiff <= 35) {
                             txs.forEach(t => recurring.add(t.name));
                             break;
@@ -1168,7 +1232,6 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false },
                         tooltip: {
                             backgroundColor: '#1f1f1f',
                             titleColor: '#ffffff',
@@ -1224,25 +1287,18 @@
             
             const labels = Object.keys(categoryTotals);
             const data = Object.values(categoryTotals);
-            const colors = {
-                groceries: '#063a44',
-                dining: '#00565d',
-                transportation: '#006b67',
-                entertainment: '#00806a',
-                shopping: '#389e61',
-                subscription: '#6fb353',
-                other: '#a8c544'
-            };
+            const palette = ['#1AA9D0', '#2488D5', '#3669D5', '#2140A3', '#161F6F'];
+            const chartLabels = labels.map(l => l.charAt(0).toUpperCase() + l.slice(1));
             
             if (categoryChart) categoryChart.destroy();
             
             categoryChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                    labels: chartLabels,
                     datasets: [{
                         data: data,
-                        backgroundColor: labels.map(l => colors[l] || '#e8d33a'),
+                        backgroundColor: labels.map((_, index) => palette[index % palette.length]),
                         borderWidth: 2,
                         borderColor: '#141414'
                     }]
@@ -1250,16 +1306,13 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    cutout: '56%',
+                    layout: {
+                        padding: { left: 54, right: 54, top: 20, bottom: 20 }
+                    },
                     plugins: {
                         legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: '#9ca3af',
-                                padding: 14,
-                                font: { size: 12, weight: '600' },
-                                usePointStyle: true,
-                                pointStyle: 'circle'
-                            }
+                            display: false
                         },
                         tooltip: {
                             backgroundColor: '#1f1f1f',
@@ -1277,7 +1330,8 @@
                             }
                         }
                     }
-                }
+                },
+                plugins: [donutCategoryLabelPlugin]
             });
         }
 
@@ -1326,9 +1380,11 @@
                 sidebarFixedList.innerHTML = state.fixedExpenses.map((exp, index) => `
                     <div class="setting-item">
                         <span class="setting-label">${exp.name}</span>
-                        <span class="setting-value">$${Math.round(exp.amount).toLocaleString()}</span>
-                        <div class="expense-actions">
-                            <button class="inline-action" onclick="event.stopPropagation(); openFixedModal(${index})">Edit</button>
+                        <div class="fixed-expense-meta">
+                            <span class="setting-value fixed-expense-value">$${Math.round(exp.amount).toLocaleString()}</span>
+                            <div class="expense-actions">
+                                <button class="inline-action" onclick="event.stopPropagation(); openFixedModal(${index})">Edit</button>
+                            </div>
                         </div>
                     </div>
                 `).join('');
