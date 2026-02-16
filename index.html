@@ -354,9 +354,15 @@
         .accounts-table { width: 100%; border-collapse: collapse; }
         .accounts-table th, .accounts-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px; }
         .accounts-table th:first-child, .accounts-table td:first-child { text-align: left; }
-        .accounts-table th:nth-child(2), .accounts-table td:nth-child(2),
-        .accounts-table th:nth-child(3), .accounts-table td:nth-child(3) { text-align: right; }
+        .accounts-table th:not(:first-child), .accounts-table td:not(:first-child) { text-align: right; }
         .accounts-table tbody tr:last-child td { border-bottom: none; }
+        .accounts-table tr.account-row-clickable {
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .accounts-table tr.account-row-clickable:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
         .account-name {
             color: var(--text-primary);
             font-weight: 600;
@@ -827,6 +833,17 @@
             background: var(--text-secondary);
         }
 
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.14);
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.22);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
         .btn-secondary {
             margin-top: 16px;
         }
@@ -857,6 +874,10 @@
             padding: 48px;
             max-width: 500px;
             width: 100%;
+        }
+
+        .modal-content.wide {
+            max-width: 760px;
         }
 
         .modal-header {
@@ -914,6 +935,58 @@
             font-weight: 700;
         }
 
+        .account-modal-toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: end;
+            margin-bottom: 20px;
+        }
+
+        .account-modal-name-wrap {
+            flex: 1;
+        }
+
+        .account-modal-toolbar .btn {
+            width: auto;
+            min-width: 120px;
+            margin: 0;
+        }
+
+        .holdings-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+        }
+
+        .holdings-table th,
+        .holdings-table td {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+            text-align: right;
+        }
+
+        .holdings-table th:first-child,
+        .holdings-table td:first-child {
+            text-align: left;
+        }
+
+        .holdings-table th {
+            color: var(--text-secondary);
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+        }
+
+        .holdings-table td {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .holdings-table td.positive { color: var(--green); }
+        .holdings-table td.negative { color: var(--red); }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 36px;
@@ -938,6 +1011,13 @@
             }
             .search-input, .filter-select {
                 min-width: 0;
+            }
+            .account-modal-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .account-modal-toolbar .btn {
+                width: 100%;
             }
         }
     </style>
@@ -1103,7 +1183,7 @@
                     <div class="accounts-table-wrap">
                         <table class="accounts-table">
                             <thead>
-                                <tr><th>Account</th><th>Paid Off YTD</th><th>Current Value</th></tr>
+                                <tr><th>Account</th><th>Interest Rate</th><th>Paid Off YTD</th><th>Current Value</th></tr>
                             </thead>
                             <tbody id="liabilitiesTableBody"></tbody>
                         </table>
@@ -1156,6 +1236,7 @@
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('fixedModal')">Cancel</button>
+                <button class="btn btn-danger" id="fixedDeleteBtn" onclick="removeFixedExpense()" style="display:none;">Remove</button>
                 <button class="btn btn-primary" id="fixedSubmitBtn" onclick="saveFixedExpense()">Add</button>
             </div>
         </div>
@@ -1225,12 +1306,33 @@
         </div>
     </div>
 
+    <div class="modal" id="accountDetailsModal">
+        <div class="modal-content wide">
+            <div class="modal-header" id="accountDetailsHeader">Account Details</div>
+            <div class="account-modal-toolbar">
+                <div class="account-modal-name-wrap">
+                    <label class="form-label">Account Name</label>
+                    <input type="text" class="form-input" id="accountDetailsNameInput" placeholder="Account name">
+                </div>
+                <button class="btn btn-primary" onclick="saveAccountDetailsName()">Save Name</button>
+            </div>
+            <table class="holdings-table">
+                <thead id="accountDetailsTableHead"></thead>
+                <tbody id="accountHoldingsBody"></tbody>
+            </table>
+            <div class="btn-group">
+                <button class="btn" onclick="closeModal('accountDetailsModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], lastAccountsUpdatedAt: null };
         let editingFixedExpenseIndex = null;
         let currentReimbursableIndex = null;
         let currentRenameAccountId = null;
+        let currentAccountDetailsId = null;
         let trendChart = null;
         let categoryChart = null;
 
@@ -1473,7 +1575,7 @@
                 accounts: [
                     { id: 'demo-checking', name: 'Everyday Checking', type: 'depository', subtype: 'checking', balance: 8420, custodian: 'Chase', lastUpdatedAt: new Date().toISOString() },
                     { id: 'demo-savings', name: 'Emergency Savings', type: 'depository', subtype: 'savings', balance: 18600, custodian: 'Chase', lastUpdatedAt: new Date().toISOString() },
-                    { id: 'demo-credit', name: 'Freedom Unlimited', type: 'credit', subtype: 'credit card', balance: 1430, custodian: 'Chase', lastUpdatedAt: new Date().toISOString() }
+                    { id: 'demo-credit', name: 'Freedom Unlimited', type: 'credit', subtype: 'credit card', balance: 1430, custodian: 'Chase', interestRate: 22.49, termMonths: 36, nextPaymentDate: '2026-03-06', paymentAmount: 145, lastUpdatedAt: new Date().toISOString() }
                 ],
                 fixedExpenses: [
                     { name: 'Rent', amount: 2200 }, { name: 'Car Payment', amount: 450 },
@@ -1946,6 +2048,36 @@
             return ['credit', 'loan', 'liability'].includes((acc.type || '').toLowerCase());
         }
 
+        function formatCurrency(value) {
+            const amount = Math.round(Math.abs(Number(value) || 0)).toLocaleString();
+            return Number(value) < 0 ? `($${amount})` : `$${amount}`;
+        }
+
+        function formatPercent(value) {
+            const pct = Number(value || 0);
+            return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+        }
+
+        function computePerformancePct(account, kind) {
+            const value = Number(account.balance || 0);
+            const currentYear = new Date().getFullYear();
+            const accountTx = state.transactions.filter(tx => tx.accountId === account.id && new Date(tx.date).getFullYear() === currentYear);
+            const ytdRaw = kind === 'liability'
+                ? accountTx.reduce((sum, tx) => sum + Math.max(0, tx.amount || 0), 0)
+                : accountTx.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+            const denominator = Math.abs(value) > 0 ? Math.abs(value) : 1;
+            return Number(((ytdRaw / denominator) * 100).toFixed(1));
+        }
+
+        function getLiabilityDetails(account) {
+            return {
+                interestRate: Number(account.interestRate || 0),
+                termMonths: Number(account.termMonths || 0),
+                nextPaymentDate: account.nextPaymentDate || '--',
+                paymentAmount: Number(account.paymentAmount || 0),
+            };
+        }
+
         function renderAccountsWidget() {
             const assetsBody = document.getElementById('assetsTableBody');
             const liabilitiesBody = document.getElementById('liabilitiesTableBody');
@@ -1959,20 +2091,15 @@
                 .filter(acc => isLiabilityAccount(acc))
                 .sort((a, b) => Math.abs(Number(b.balance || 0)) - Math.abs(Number(a.balance || 0)));
 
-            const currentYear = new Date().getFullYear();
             let totalAssets = 0;
             let totalLiabilities = 0;
 
             const buildRows = (list, kind) => {
-                if (!list.length) return `<tr><td colspan="3" class="empty-state">No linked ${kind} accounts yet.</td></tr>`;
+                const colCount = kind === 'liability' ? 4 : 3;
+                if (!list.length) return `<tr><td colspan="${colCount}" class="empty-state">No linked ${kind} accounts yet.</td></tr>`;
                 return list.map(acc => {
                     const value = Number(acc.balance || 0);
-                    const accountTx = state.transactions.filter(tx => tx.accountId === acc.id && new Date(tx.date).getFullYear() === currentYear);
-                    const ytdRaw = kind === 'liability'
-                        ? accountTx.reduce((sum, tx) => sum + Math.max(0, tx.amount || 0), 0)
-                        : accountTx.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-                    const denominator = Math.abs(value) > 0 ? Math.abs(value) : 1;
-                    const ytdPct = ((ytdRaw / denominator) * 100).toFixed(1);
+                    const ytdPct = computePerformancePct(acc, kind);
                     const lastUpdated = acc.lastUpdatedAt || state.lastAccountsUpdatedAt;
                     const lastUpdatedLabel = lastUpdated
                         ? new Date(lastUpdated).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -1981,13 +2108,26 @@
                     if (kind === 'asset') totalAssets += Math.max(value, 0);
                     else totalLiabilities += Math.abs(value);
 
-                    return `<tr>
+                    if (kind === 'liability') {
+                        const liabilityDetails = getLiabilityDetails(acc);
+                        return `<tr class="account-row-clickable" onclick="openAccountDetailsModal('${acc.id}', '${kind}')">
+                            <td>
+                                <span class="account-name">${acc.name}</span><span class="account-subtype">${acc.custodian || 'Linked institution'}</span>
+                                <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
+                            </td>
+                            <td>${liabilityDetails.interestRate ? `${liabilityDetails.interestRate.toFixed(2)}%` : '--'}</td>
+                            <td style="color:${ytdPct >= 0 ? 'var(--green)' : 'var(--red)'}">${formatPercent(ytdPct)}</td>
+                            <td>${formatCurrency(-Math.abs(value))}</td>
+                        </tr>`;
+                    }
+
+                    return `<tr class="account-row-clickable" onclick="openAccountDetailsModal('${acc.id}', '${kind}')">
                         <td>
-                            <span class="account-name" onclick="openRenameAccountModal('${acc.id}')" title="Click to rename this account">${acc.name}</span><span class="account-subtype">${acc.custodian || 'Linked institution'}</span>
+                            <span class="account-name">${acc.name}</span><span class="account-subtype">${acc.custodian || 'Linked institution'}</span>
                             <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
                         </td>
-                        <td style="color:${ytdRaw >= 0 ? 'var(--green)' : 'var(--red)'}">${ytdPct}% (${ytdRaw >= 0 ? '+' : '-'}$${Math.round(Math.abs(ytdRaw)).toLocaleString()})</td>
-                        <td>${kind === 'liability' ? `($${Math.round(Math.abs(value)).toLocaleString()})` : `$${Math.round(Math.abs(value)).toLocaleString()}`}</td>
+                        <td style="color:${ytdPct >= 0 ? 'var(--green)' : 'var(--red)'}">${formatPercent(ytdPct)}</td>
+                        <td>${formatCurrency(Math.abs(value))}</td>
                     </tr>`;
                 }).join('');
             };
@@ -1996,6 +2136,69 @@
             liabilitiesBody.innerHTML = buildRows(liabilityAccounts, 'liability');
             setTextIfPresent('totalAssetsValue', `$${Math.round(totalAssets).toLocaleString()}`);
             setTextIfPresent('totalLiabilitiesValue', `($${Math.round(totalLiabilities).toLocaleString()})`);
+        }
+
+        function openAccountDetailsModal(accountId, kind) {
+            const account = (state.accounts || []).find(acc => acc.id === accountId);
+            if (!account) return;
+            currentAccountDetailsId = accountId;
+
+            document.getElementById('accountDetailsHeader').textContent = `${kind === 'liability' ? 'Liability' : 'Asset'} Details`;
+            document.getElementById('accountDetailsNameInput').value = account.name || '';
+
+            const tableHead = document.getElementById('accountDetailsTableHead');
+            const tableBody = document.getElementById('accountHoldingsBody');
+
+            if (kind === 'liability') {
+                const details = getLiabilityDetails(account);
+                tableHead.innerHTML = '<tr><th>Holding</th><th>Interest Rate</th><th>Term</th><th>Next Payment Date</th><th>Payment Amount</th></tr>';
+                tableBody.innerHTML = `<tr>
+                    <td>${account.name}</td>
+                    <td>${details.interestRate ? `${details.interestRate.toFixed(2)}%` : '--'}</td>
+                    <td>${details.termMonths ? `${details.termMonths} mo` : '--'}</td>
+                    <td>${details.nextPaymentDate !== '--' ? new Date(details.nextPaymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '--'}</td>
+                    <td>${details.paymentAmount ? formatCurrency(details.paymentAmount) : '--'}</td>
+                </tr>`;
+            } else {
+                tableHead.innerHTML = '<tr><th>Holding</th><th>Live</th><th>YTD</th><th>Value</th><th>Weight</th></tr>';
+                const ytdPct = computePerformancePct(account, kind);
+                const holdings = (account.holdings && account.holdings.length)
+                    ? account.holdings
+                    : [{
+                        symbol: account.subtype ? account.subtype.toUpperCase() : 'ACCOUNT',
+                        name: account.name,
+                        value: Math.abs(Number(account.balance || 0)),
+                        weight: 100,
+                        livePct: Number((ytdPct * 0.45).toFixed(1)),
+                        ytdPct,
+                    }];
+
+                tableBody.innerHTML = holdings.map(h => {
+                    const holdWeight = Number(h.weight || 0);
+                    const holdLive = Number(h.livePct || 0);
+                    const holdYtd = Number(h.ytdPct || 0);
+                    const holdValue = Number(h.value || 0);
+                    return `<tr>
+                        <td>${h.symbol || '--'} <span class="account-subtype">${h.name || ''}</span></td>
+                        <td class="${holdLive >= 0 ? 'positive' : 'negative'}">${formatPercent(holdLive)}</td>
+                        <td class="${holdYtd >= 0 ? 'positive' : 'negative'}">${formatPercent(holdYtd)}</td>
+                        <td>${formatCurrency(holdValue)}</td>
+                        <td>${holdWeight.toFixed(1)}%</td>
+                    </tr>`;
+                }).join('');
+            }
+
+            document.getElementById('accountDetailsModal').classList.add('active');
+        }
+
+        function saveAccountDetailsName() {
+            if (!currentAccountDetailsId) return;
+            const account = (state.accounts || []).find(acc => acc.id === currentAccountDetailsId);
+            if (!account) return;
+            const nextName = document.getElementById('accountDetailsNameInput').value.trim();
+            if (!nextName) return;
+            account.name = nextName;
+            updateUI();
         }
 
         function openRenameAccountModal(accountId) {
@@ -2168,16 +2371,19 @@
             const amountInput = document.getElementById('fixedAmountInput');
             const header = document.getElementById('fixedModalHeader');
             const submitBtn = document.getElementById('fixedSubmitBtn');
+            const deleteBtn = document.getElementById('fixedDeleteBtn');
             if (index !== null && state.fixedExpenses[index]) {
                 nameInput.value = state.fixedExpenses[index].name;
                 amountInput.value = state.fixedExpenses[index].amount;
                 header.textContent = 'Edit Fixed Expense';
                 submitBtn.textContent = 'Save';
+                deleteBtn.style.display = 'inline-flex';
             } else {
                 nameInput.value = '';
                 amountInput.value = '';
                 header.textContent = 'Fixed Expense';
                 submitBtn.textContent = 'Add';
+                deleteBtn.style.display = 'none';
             }
             document.getElementById('fixedModal').classList.add('active');
             if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
@@ -2211,22 +2417,36 @@
             document.getElementById(modalId).classList.remove('active');
             if (modalId === 'fixedModal') editingFixedExpenseIndex = null;
             if (modalId === 'renameAccountModal') currentRenameAccountId = null;
+            if (modalId === 'accountDetailsModal') currentAccountDetailsId = null;
         }
         function saveIncome() { const value = parseFloat(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); closeModal('incomeModal'); } }
         function saveSavings() { const value = parseFloat(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); closeModal('savingsModal'); } }
         function saveFixedExpense() {
             const name = document.getElementById('fixedNameInput').value.trim();
-            const amount = parseFloat(document.getElementById('fixedAmountInput').value);
-            if (name && amount > 0) {
-                if (editingFixedExpenseIndex !== null && state.fixedExpenses[editingFixedExpenseIndex]) {
-                    state.fixedExpenses[editingFixedExpenseIndex] = { name, amount };
+            const amount = parseFloat(document.getElementById('fixedAmountInput').value) || 0;
+            if (!name) return;
+
+            if (editingFixedExpenseIndex !== null && state.fixedExpenses[editingFixedExpenseIndex]) {
+                if (amount <= 0) {
+                    state.fixedExpenses.splice(editingFixedExpenseIndex, 1);
                 } else {
-                    state.fixedExpenses.push({ name, amount });
+                    state.fixedExpenses[editingFixedExpenseIndex] = { name, amount };
                 }
-                editingFixedExpenseIndex = null;
-                updateUI();
-                closeModal('fixedModal');
+            } else if (amount > 0) {
+                state.fixedExpenses.push({ name, amount });
             }
+
+            editingFixedExpenseIndex = null;
+            updateUI();
+            closeModal('fixedModal');
+        }
+
+        function removeFixedExpense() {
+            if (editingFixedExpenseIndex === null || !state.fixedExpenses[editingFixedExpenseIndex]) return;
+            state.fixedExpenses.splice(editingFixedExpenseIndex, 1);
+            editingFixedExpenseIndex = null;
+            updateUI();
+            closeModal('fixedModal');
         }
         function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 28) { state.budgetStartDay = day; updateUI(); closeModal('budgetPeriodModal'); } }
 
