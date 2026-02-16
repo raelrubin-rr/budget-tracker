@@ -1019,18 +1019,37 @@
 
         .account-modal-toolbar {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: end;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.02);
         }
 
         .account-modal-name-wrap {
             flex: 1;
         }
 
+        .account-modal-name-wrap .form-label {
+            font-size: 10px;
+            margin-bottom: 4px;
+            letter-spacing: 0.03em;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+        }
+
+        .account-modal-name-wrap .form-input {
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+
         .account-modal-toolbar .btn {
             width: auto;
-            min-width: 120px;
+            min-width: 96px;
+            padding: 10px 14px;
+            font-size: 13px;
             margin: 0;
         }
 
@@ -1093,7 +1112,8 @@
         .holdings-table.liability-details-table th,
         .holdings-table.liability-details-table td {
             padding: 12px 10px;
-            white-space: nowrap;
+            white-space: normal;
+            overflow-wrap: anywhere;
         }
 
         .holdings-table.liability-details-table {
@@ -1296,14 +1316,43 @@
             .account-modal-toolbar {
                 flex-direction: column;
                 align-items: stretch;
+                gap: 8px;
+                padding: 8px 10px;
             }
             .account-modal-toolbar .btn {
                 width: 100%;
             }
-            .holdings-table {
+            #accountDetailsModal .holdings-table {
+                display: table;
+                width: 100%;
+                table-layout: fixed;
+            }
+            #accountDetailsModal .holdings-table th,
+            #accountDetailsModal .holdings-table td {
+                font-size: 12px;
+                padding: 8px 4px;
+            }
+            #accountDetailsModal .holdings-table th {
+                font-size: 10px;
+                line-height: 1.25;
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
+            #accountDetailsModal .holdings-table th:first-child,
+            #accountDetailsModal .holdings-table td:first-child {
+                width: 34%;
+            }
+            #accountDetailsModal .holdings-table th:nth-child(2),
+            #accountDetailsModal .holdings-table td:nth-child(2),
+            #accountDetailsModal .holdings-table th:nth-child(3),
+            #accountDetailsModal .holdings-table td:nth-child(3) {
+                width: 33%;
+            }
+            .holdings-table td .account-subtype {
                 display: block;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
+                margin-left: 0;
+                margin-top: 2px;
+                line-height: 1.2;
             }
         }
 
@@ -2542,7 +2591,7 @@
             if (kind === 'liability') {
                 tableEl.classList.add('liability-details-table');
                 const details = getLiabilityDetails(account);
-                tableHead.innerHTML = '<tr><th>Liability</th><th>Next Payment Date</th><th>Payment Amount</th></tr>';
+                tableHead.innerHTML = '<tr><th>Liability</th><th>Next Payment</th><th>Payment Amount</th></tr>';
                 tableBody.innerHTML = `<tr>
                     <td>${account.name}</td>
                     <td>${formatShortDate(details.nextPaymentDate)}</td>
@@ -2550,7 +2599,7 @@
                 </tr>`;
             } else {
                 tableEl.classList.remove('liability-details-table');
-                tableHead.innerHTML = '<tr><th>Holding</th><th>Current Value</th><th>% Weight</th></tr>';
+                tableHead.innerHTML = '<tr><th>Holding</th><th>Value</th><th>Weight</th></tr>';
                 const ytdPct = computePerformancePct(account, kind);
                 const holdings = (account.holdings && account.holdings.length)
                     ? account.holdings
