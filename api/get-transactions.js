@@ -22,29 +22,22 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createStableMetric(seed = '') {
-  return seed.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-}
-
-function buildHoldingsForAccount(account) {
+function buildFallbackHoldingForAccount(account) {
   const absoluteValue = Math.abs(Number(account?.balances?.current || 0));
   const baseSymbol = (account?.subtype || account?.type || 'account').toUpperCase().slice(0, 8);
-  const metric = createStableMetric(`${account?.account_id || ''}${account?.name || ''}`);
-  const livePct = Number((((metric % 25) - 12) / 10).toFixed(1));
-  const ytdPct = Number((((metric % 190) - 60) / 10).toFixed(1));
 
   return [{
     symbol: baseSymbol,
     name: account?.name || 'Holding',
     weight: 100,
     value: absoluteValue,
-    livePct,
-    ytdPct,
+    livePct: null,
+    ytdPct: null,
   }];
 }
 
 function buildLiabilityDetails(account) {
-  const metric = createStableMetric(`${account?.account_id || ''}${account?.subtype || ''}`);
+  const metric = `${account?.account_id || ''}${account?.subtype || ''}`.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
   const isLiability = ['credit', 'loan', 'liability'].includes((account?.type || '').toLowerCase());
   if (!isLiability) return {};
 
@@ -60,6 +53,28 @@ function buildLiabilityDetails(account) {
     nextPaymentDate: nextPaymentDate.toISOString().split('T')[0],
     paymentAmount,
   };
+}
+
+async function fetchInvestmentsHoldings(access_token) {
+  try {
+    const holdingsResponse = await plaidClient.investmentsHoldingsGet({ access_token });
+    return holdingsResponse.data;
+  } catch (error) {
+    const plaidErrorCode = getPlaidErrorCode(error);
+    const unsupportedErrors = new Set([
+      'INVALID_PRODUCT',
+      'PRODUCTS_NOT_SUPPORTED',
+      'NO_LIABILITY_ACCOUNTS',
+      'NO_INVESTMENT_ACCOUNTS',
+      'PRODUCT_NOT_READY',
+    ]);
+
+    if (unsupportedErrors.has(plaidErrorCode)) {
+      return { holdings: [], securities: [] };
+    }
+
+    throw error;
+  }
 }
 
 
@@ -112,7 +127,17 @@ module.exports = async (req, res) => {
 
     const response = await fetchTransactionsWithRetry(access_token, start_date, end_date);
     const accountsResponse = await plaidClient.accountsGet({ access_token });
+    const investmentsData = await fetchInvestmentsHoldings(access_token);
     const accounts = accountsResponse.data.accounts;
+    const securitiesById = (investmentsData.securities || []).reduce((acc, security) => {
+      acc[security.security_id] = security;
+      return acc;
+    }, {});
+    const holdingsByAccountId = (investmentsData.holdings || []).reduce((acc, holding) => {
+      if (!acc[holding.account_id]) acc[holding.account_id] = [];
+      acc[holding.account_id].push(holding);
+      return acc;
+    }, {});
 
     const rawTransactions = response.data.transactions.map((tx) => {
       const account = accounts.find((acc) => acc.account_id === tx.account_id);
@@ -140,15 +165,41 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({
       transactions,
-      accounts: accounts.map((acc) => ({
-        id: acc.account_id,
-        name: acc.name,
-        type: acc.type,
-        subtype: acc.subtype,
-        balance: acc.balances.current,
-        holdings: buildHoldingsForAccount(acc),
-        ...buildLiabilityDetails(acc),
-      })),
+      accounts: accounts.map((acc) => {
+        const accountHoldings = holdingsByAccountId[acc.account_id] || [];
+        const holdingsTotal = accountHoldings.reduce((sum, holding) => sum + Math.abs(Number(holding.institution_value || 0)), 0);
+
+        const mappedHoldings = accountHoldings.length
+          ? accountHoldings.map((holding) => {
+            const security = securitiesById[holding.security_id] || {};
+            const value = Math.abs(Number(holding.institution_value || 0));
+            const costBasis = Number(holding.cost_basis || 0);
+            const institutionPrice = Number(holding.institution_price || 0);
+            const livePct = costBasis > 0
+              ? Number((((institutionPrice - costBasis) / costBasis) * 100).toFixed(1))
+              : null;
+
+            return {
+              symbol: security.ticker_symbol || security.name || acc.subtype || 'HOLDING',
+              name: security.name || holding.security_id || acc.name || 'Holding',
+              value,
+              weight: holdingsTotal > 0 ? Number(((value / holdingsTotal) * 100).toFixed(1)) : 0,
+              livePct,
+              ytdPct: null,
+            };
+          })
+          : buildFallbackHoldingForAccount(acc);
+
+        return {
+          id: acc.account_id,
+          name: acc.name,
+          type: acc.type,
+          subtype: acc.subtype,
+          balance: acc.balances.current,
+          holdings: mappedHoldings,
+          ...buildLiabilityDetails(acc),
+        };
+      }),
     });
   } catch (error) {
     console.error('Error fetching transactions:', error);

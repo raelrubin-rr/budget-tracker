@@ -17,13 +17,13 @@
         }
 
         :root {
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #141414;
-            --bg-tertiary: #1f1f1f;
+            --bg-primary: #06080d;
+            --bg-secondary: #0f141d;
+            --bg-tertiary: #171f2b;
             --text-primary: #ffffff;
-            --text-secondary: #b0b0b0;
-            --text-tertiary: #707070;
-            --border-color: #2a2a2a;
+            --text-secondary: #b8c2d3;
+            --text-tertiary: #7e8ca5;
+            --border-color: #253042;
             --green: #10b981;
             --red: #ef4444;
             --blue: #3b82f6;
@@ -36,7 +36,7 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
+            background: radial-gradient(circle at top left, #132038 0%, var(--bg-primary) 55%);
             color: var(--text-primary);
             line-height: 1.5;
             padding-bottom: 80px;
@@ -98,12 +98,14 @@
         }
 
         .card {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
+            background: linear-gradient(160deg, rgba(22, 32, 49, 0.96), rgba(12, 19, 32, 0.96));
+            border: 1px solid var(--border-color);
             border-radius: 22px;
             padding: 36px;
             margin-bottom: 24px;
             width: 100%;
+            box-shadow: 0 24px 40px rgba(0, 0, 0, 0.32);
+            backdrop-filter: blur(8px);
         }
 
         .date-info {
@@ -320,8 +322,8 @@
         }
 
         .accounts-panel {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
+            background: linear-gradient(180deg, rgba(18, 25, 38, 0.95), rgba(12, 18, 29, 0.95));
+            border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 14px 14px 0;
             display: flex;
@@ -704,8 +706,8 @@
             right: -500px;
             width: 500px;
             height: 100vh;
-            background: var(--bg-primary);
-            border-left: 2px solid var(--border-color);
+            background: linear-gradient(180deg, #0f1725 0%, #0a101c 100%);
+            border-left: 1px solid var(--border-color);
             transition: right 0.4s ease;
             z-index: 2000;
             overflow-y: auto;
@@ -754,6 +756,10 @@
             letter-spacing: 0.5px;
             margin-bottom: 20px;
             font-weight: 800;
+        }
+
+        .sidebar-section-title--highlight {
+            color: var(--text-primary);
         }
 
         .setting-item {
@@ -992,6 +998,12 @@
             text-align: center;
         }
 
+        #fixedModal .form-input,
+        #fixedModal .form-select,
+        #fixedModal .setting-label {
+            text-align: center;
+        }
+
         #fixedModal .modal-header,
         #fixedModal #fixedDeleteBtn {
             text-align: center;
@@ -1056,6 +1068,27 @@
 
         .holdings-table td.positive { color: var(--green); }
         .holdings-table td.negative { color: var(--red); }
+
+        .holding-value-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .holding-main-row td {
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+
+        .holding-performance-item {
+            font-weight: 700;
+            font-size: 12px;
+            line-height: 1.3;
+        }
+
+        .holding-performance-item.positive { color: var(--green); }
+        .holding-performance-item.negative { color: var(--red); }
 
         .holdings-table.liability-details-table th,
         .holdings-table.liability-details-table td {
@@ -1359,7 +1392,7 @@
         </div>
         <div class="sidebar-content">
             <div class="sidebar-section">
-                <div class="sidebar-section-title">Budget</div>
+                <div class="sidebar-section-title sidebar-section-title--highlight">Budget</div>
                 <div class="setting-item editable" onclick="openIncomeModal()" title="Click to edit monthly income">
                     <span class="setting-label">Monthly Income</span>
                     <span class="setting-value setting-value-wrap editable-value" id="sidebarIncome">$0</span>
@@ -1375,7 +1408,7 @@
             </div>
 
             <div class="sidebar-section">
-                <div class="sidebar-section-title">Fixed Expenses</div>
+                <div class="sidebar-section-title sidebar-section-title--highlight">Fixed Expenses</div>
                 <div id="sidebarFixedList"></div>
                 <button class="btn btn-secondary" onclick="openFixedModal()">Add Expense</button>
             </div>
@@ -1504,7 +1537,7 @@
                     <div class="accounts-table-wrap">
                         <table class="accounts-table liabilities-table">
                             <thead>
-                                <tr><th>Account</th><th>Paid Off YTD</th><th>Interest Rate</th><th>Current Value</th></tr>
+                                <tr><th>Account</th><th>Next Payment</th><th>Payment Amount</th><th>Current Value</th></tr>
                             </thead>
                             <tbody id="liabilitiesTableBody"></tbody>
                         </table>
@@ -2379,6 +2412,17 @@
             return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
         }
 
+
+        function formatShortDate(value) {
+            if (!value) return '--';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '--';
+            const mm = date.getMonth() + 1;
+            const dd = date.getDate();
+            const yy = String(date.getFullYear()).slice(-2);
+            return `${mm}/${dd}/${yy}`;
+        }
+
         function computePerformancePct(account, kind) {
             const value = Number(account.balance || 0);
             const currentYear = new Date().getFullYear();
@@ -2457,8 +2501,8 @@
                                     <span class="account-name">${acc.name}</span>
                                     <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
                                 </td>
-                                <td style="color:${ytdPct >= 0 ? 'var(--green)' : 'var(--red)'}">${formatPercent(ytdPct)}</td>
-                                <td>${liabilityDetails.interestRate ? `${liabilityDetails.interestRate.toFixed(2)}%` : '--'}</td>
+                                <td>${formatShortDate(liabilityDetails.nextPaymentDate)}</td>
+                                <td>${liabilityDetails.paymentAmount ? formatCurrency(liabilityDetails.paymentAmount) : '--'}</td>
                                 <td>${formatCurrency(-Math.abs(value))}</td>
                             </tr>`;
                         }
@@ -2498,17 +2542,15 @@
             if (kind === 'liability') {
                 tableEl.classList.add('liability-details-table');
                 const details = getLiabilityDetails(account);
-                tableHead.innerHTML = '<tr><th>Holding</th><th>Interest Rate</th><th>Term</th><th>Next Payment Date</th><th>Payment Amount</th></tr>';
+                tableHead.innerHTML = '<tr><th>Liability</th><th>Next Payment Date</th><th>Payment Amount</th></tr>';
                 tableBody.innerHTML = `<tr>
                     <td>${account.name}</td>
-                    <td>${details.interestRate ? `${details.interestRate.toFixed(2)}%` : '--'}</td>
-                    <td>${details.termMonths ? `${details.termMonths} mo` : '--'}</td>
-                    <td>${details.nextPaymentDate !== '--' ? new Date(details.nextPaymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '--'}</td>
+                    <td>${formatShortDate(details.nextPaymentDate)}</td>
                     <td>${details.paymentAmount ? formatCurrency(details.paymentAmount) : '--'}</td>
                 </tr>`;
             } else {
                 tableEl.classList.remove('liability-details-table');
-                tableHead.innerHTML = '<tr><th>Holding</th><th>Live</th><th>YTD</th><th>Value</th><th>Weight</th></tr>';
+                tableHead.innerHTML = '<tr><th>Holding</th><th>Current Value</th><th>% Weight</th></tr>';
                 const ytdPct = computePerformancePct(account, kind);
                 const holdings = (account.holdings && account.holdings.length)
                     ? account.holdings
@@ -2517,20 +2559,24 @@
                         name: account.name,
                         value: Math.abs(Number(account.balance || 0)),
                         weight: 100,
-                        livePct: Number((ytdPct * 0.45).toFixed(1)),
+                        livePct: null,
                         ytdPct,
                     }];
 
                 tableBody.innerHTML = holdings.map(h => {
                     const holdWeight = Number(h.weight || 0);
-                    const holdLive = Number(h.livePct || 0);
-                    const holdYtd = Number(h.ytdPct || 0);
+                    const holdLive = h.livePct === null || h.livePct === undefined || h.livePct === '' ? null : Number(h.livePct);
+                    const holdYtd = h.ytdPct === null || h.ytdPct === undefined || h.ytdPct === '' ? ytdPct : Number(h.ytdPct);
                     const holdValue = Number(h.value || 0);
-                    return `<tr>
+                    const liveClass = holdLive !== null && holdLive < 0 ? 'negative' : 'positive';
+                    const ytdClass = holdYtd < 0 ? 'negative' : 'positive';
+                    return `<tr class="holding-main-row">
                         <td>${h.symbol || '--'} <span class="account-subtype">${h.name || ''}</span></td>
-                        <td class="${holdLive >= 0 ? 'positive' : 'negative'}">${formatPercent(holdLive)}</td>
-                        <td class="${holdYtd >= 0 ? 'positive' : 'negative'}">${formatPercent(holdYtd)}</td>
-                        <td>${formatCurrency(holdValue)}</td>
+                        <td class="holding-value-cell">
+                            <div>${formatCurrency(holdValue)}</div>
+                            <div class="holding-performance-item ${liveClass}">C: ${holdLive === null ? '--' : formatPercent(holdLive)}</div>
+                            <div class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</div>
+                        </td>
                         <td>${holdWeight.toFixed(1)}%</td>
                     </tr>`;
                 }).join('');
