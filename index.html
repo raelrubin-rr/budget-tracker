@@ -484,6 +484,10 @@
             height: auto;
         }
 
+        .transactions-grid.rolled-up .section-header {
+            border-bottom: 2px solid var(--border-color);
+        }
+
         .transaction-body {
             flex: 1;
             min-height: 0;
@@ -845,6 +849,7 @@
             font-family: 'Inter', sans-serif;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            text-align: center;
         }
 
         .btn:hover {
@@ -960,6 +965,19 @@
             flex: 0 0 auto;
             min-width: 140px;
             margin: 0 auto;
+        }
+
+        .btn-group.fixed-modal-actions {
+            flex-direction: column;
+        }
+
+        .btn-group.fixed-modal-actions .btn-danger {
+            min-width: 0;
+            margin: 0;
+        }
+
+        #fixedModal .form-label {
+            text-align: center;
         }
 
         .empty-state {
@@ -1532,10 +1550,10 @@
                 <label class="form-label">Amount</label>
                 <input type="text" class="form-input currency-input" id="fixedAmountInput" placeholder="$1,500" inputmode="decimal" autocomplete="off">
             </div>
-            <div class="btn-group has-danger">
-                <button class="btn" onclick="closeModal('fixedModal')">Cancel</button>
-                <button class="btn btn-danger" id="fixedDeleteBtn" onclick="removeFixedExpense()" style="display:none;">Remove</button>
+            <div class="btn-group has-danger fixed-modal-actions">
                 <button class="btn btn-primary" id="fixedSubmitBtn" onclick="saveFixedExpense()">Save</button>
+                <button class="btn btn-danger" id="fixedDeleteBtn" onclick="removeFixedExpense()" style="display:none;">Remove</button>
+                <button class="btn" onclick="closeModal('fixedModal')">Cancel</button>
             </div>
         </div>
     </div>
