@@ -342,10 +342,13 @@
 
         .accounts-total {
             margin-top: 10px;
-            padding: 10px 8px 0;
+            padding: 14px 12px 8px;
             border-top: 2px solid var(--border-color);
             display: flex;
             justify-content: space-between;
+            align-items: baseline;
+            gap: 16px;
+            flex-wrap: wrap;
             font-size: 24px;
             font-weight: 900;
         }
@@ -372,6 +375,9 @@
             letter-spacing: 0.06em;
             text-transform: uppercase;
             color: var(--text-tertiary);
+        }
+        .accounts-table td.account-cell {
+            padding-left: 24px;
         }
         .accounts-table tr.account-row-clickable {
             cursor: pointer;
@@ -1156,7 +1162,7 @@
                 font-size: 13px;
                 padding: 9px 7px;
                 line-height: 1.35;
-                white-space: nowrap;
+                white-space: normal;
             }
             .accounts-table th {
                 font-size: 12px;
@@ -1165,11 +1171,27 @@
             .accounts-table th:first-child,
             .accounts-table td:first-child {
                 white-space: normal;
-                min-width: 150px;
+                min-width: 136px;
             }
             .accounts-table th:not(:first-child),
             .accounts-table td:not(:first-child) {
-                min-width: 82px;
+                min-width: 92px;
+            }
+            .accounts-table.liabilities-table th,
+            .accounts-table.liabilities-table td {
+                white-space: normal;
+            }
+            .accounts-table.liabilities-table th:first-child,
+            .accounts-table.liabilities-table td:first-child {
+                min-width: 128px;
+            }
+            .accounts-table.liabilities-table th:not(:first-child),
+            .accounts-table.liabilities-table td:not(:first-child) {
+                min-width: 84px;
+                overflow-wrap: anywhere;
+            }
+            .accounts-table td.account-cell {
+                padding-left: 18px;
             }
             .account-name {
                 font-size: 14px;
@@ -1260,6 +1282,9 @@
             .accounts-table th,
             .accounts-table td {
                 font-size: 13px;
+            }
+            .accounts-table td.account-cell {
+                padding-left: 14px;
             }
             .account-name {
                 font-size: 14px;
@@ -1441,7 +1466,7 @@
                 <div class="accounts-panel">
                     <div class="accounts-section-title">Liabilities</div>
                     <div class="accounts-table-wrap">
-                        <table class="accounts-table">
+                        <table class="accounts-table liabilities-table">
                             <thead>
                                 <tr><th>Account</th><th>Paid Off YTD</th><th>Interest Rate</th><th>Current Value</th></tr>
                             </thead>
@@ -2392,7 +2417,7 @@
                         if (kind === 'liability') {
                             const liabilityDetails = getLiabilityDetails(acc);
                             return `<tr class="account-row-clickable" onclick="openAccountDetailsModal('${acc.id}', '${kind}')">
-                                <td>
+                                <td class="account-cell">
                                     <span class="account-name">${acc.name}</span>
                                     <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
                                 </td>
@@ -2403,7 +2428,7 @@
                         }
 
                         return `<tr class="account-row-clickable" onclick="openAccountDetailsModal('${acc.id}', '${kind}')">
-                            <td>
+                            <td class="account-cell">
                                 <span class="account-name">${acc.name}</span>
                                 <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
                             </td>
