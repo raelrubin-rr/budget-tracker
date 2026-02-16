@@ -361,7 +361,7 @@
             transition: background 0.2s ease;
         }
         .accounts-table tr.account-row-clickable:hover {
-            background: rgba(255, 255, 255, 0.03);
+            background: transparent;
         }
         .account-name {
             color: var(--text-primary);
@@ -371,8 +371,8 @@
             transition: border-color 0.2s, color 0.2s;
         }
         .account-name:hover {
-            color: var(--blue);
-            border-color: var(--blue);
+            color: var(--text-primary);
+            border-color: transparent;
         }
         .account-subtype { color: var(--text-tertiary); font-size: 11px; margin-left: 6px; }
         .account-meta { color: var(--text-tertiary); font-size: 10px; margin-top: 3px; }
@@ -987,6 +987,16 @@
         .holdings-table td.positive { color: var(--green); }
         .holdings-table td.negative { color: var(--red); }
 
+        .holdings-table.liability-details-table th,
+        .holdings-table.liability-details-table td {
+            padding: 12px 10px;
+        }
+
+        .holdings-table.liability-details-table th:not(:first-child),
+        .holdings-table.liability-details-table td:not(:first-child) {
+            text-align: right;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 36px;
@@ -1183,7 +1193,7 @@
                     <div class="accounts-table-wrap">
                         <table class="accounts-table">
                             <thead>
-                                <tr><th>Account</th><th>Interest Rate</th><th>Paid Off YTD</th><th>Current Value</th></tr>
+                                <tr><th>Account</th><th>Paid Off YTD</th><th>Interest Rate</th><th>Current Value</th></tr>
                             </thead>
                             <tbody id="liabilitiesTableBody"></tbody>
                         </table>
@@ -1316,7 +1326,7 @@
                 </div>
                 <button class="btn btn-primary" onclick="saveAccountDetailsName()">Save Name</button>
             </div>
-            <table class="holdings-table">
+            <table class="holdings-table" id="accountDetailsTable">
                 <thead id="accountDetailsTableHead"></thead>
                 <tbody id="accountHoldingsBody"></tbody>
             </table>
@@ -2115,8 +2125,8 @@
                                 <span class="account-name">${acc.name}</span><span class="account-subtype">${acc.custodian || 'Linked institution'}</span>
                                 <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
                             </td>
-                            <td>${liabilityDetails.interestRate ? `${liabilityDetails.interestRate.toFixed(2)}%` : '--'}</td>
                             <td style="color:${ytdPct >= 0 ? 'var(--green)' : 'var(--red)'}">${formatPercent(ytdPct)}</td>
+                            <td>${liabilityDetails.interestRate ? `${liabilityDetails.interestRate.toFixed(2)}%` : '--'}</td>
                             <td>${formatCurrency(-Math.abs(value))}</td>
                         </tr>`;
                     }
@@ -2146,10 +2156,12 @@
             document.getElementById('accountDetailsHeader').textContent = `${kind === 'liability' ? 'Liability' : 'Asset'} Details`;
             document.getElementById('accountDetailsNameInput').value = account.name || '';
 
+            const tableEl = document.getElementById('accountDetailsTable');
             const tableHead = document.getElementById('accountDetailsTableHead');
             const tableBody = document.getElementById('accountHoldingsBody');
 
             if (kind === 'liability') {
+                tableEl.classList.add('liability-details-table');
                 const details = getLiabilityDetails(account);
                 tableHead.innerHTML = '<tr><th>Holding</th><th>Interest Rate</th><th>Term</th><th>Next Payment Date</th><th>Payment Amount</th></tr>';
                 tableBody.innerHTML = `<tr>
@@ -2160,6 +2172,7 @@
                     <td>${details.paymentAmount ? formatCurrency(details.paymentAmount) : '--'}</td>
                 </tr>`;
             } else {
+                tableEl.classList.remove('liability-details-table');
                 tableHead.innerHTML = '<tr><th>Holding</th><th>Live</th><th>YTD</th><th>Value</th><th>Weight</th></tr>';
                 const ytdPct = computePerformancePct(account, kind);
                 const holdings = (account.holdings && account.holdings.length)
