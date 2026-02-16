@@ -402,7 +402,7 @@
             border-color: transparent;
         }
         .account-subtype { color: var(--text-tertiary); font-size: 11px; margin-left: 6px; }
-        .account-meta { color: var(--text-tertiary); font-size: 10px; margin-top: 3px; }
+        .account-meta { color: var(--text-tertiary); font-size: 8.75px; margin-top: 3px; }
         
         /* Transactions */
         .transaction-section {
@@ -983,6 +983,9 @@
             flex: 1 1 auto;
             min-width: 0;
             margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         #fixedModal .form-label {
@@ -1211,22 +1214,10 @@
             .accounts-table th:first-child,
             .accounts-table td:first-child {
                 white-space: normal;
-                min-width: 136px;
+                min-width: 128px;
             }
             .accounts-table th:not(:first-child),
             .accounts-table td:not(:first-child) {
-                min-width: 92px;
-            }
-            .accounts-table.liabilities-table th,
-            .accounts-table.liabilities-table td {
-                white-space: normal;
-            }
-            .accounts-table.liabilities-table th:first-child,
-            .accounts-table.liabilities-table td:first-child {
-                min-width: 128px;
-            }
-            .accounts-table.liabilities-table th:not(:first-child),
-            .accounts-table.liabilities-table td:not(:first-child) {
                 min-width: 84px;
                 overflow-wrap: anywhere;
             }
@@ -1237,7 +1228,7 @@
                 font-size: 14px;
             }
             .account-meta {
-                font-size: 11px;
+                font-size: 7.75px;
                 line-height: 1.35;
             }
             .accounts-table .custodian-row td {
@@ -1330,7 +1321,7 @@
                 font-size: 14px;
             }
             .account-meta {
-                font-size: 12px;
+                font-size: 7.75px;
             }
             .transaction-title {
                 font-size: 13px;
