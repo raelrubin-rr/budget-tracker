@@ -333,6 +333,10 @@
             border-left: none;
         }
 
+        .accounts-panel--liabilities {
+            background: var(--bg-secondary);
+        }
+
         .accounts-table-wrap {
             flex: 1;
             min-width: 0;
@@ -952,6 +956,12 @@
             flex: 1;
         }
 
+        .btn-group.has-danger .btn-danger {
+            flex: 0 0 auto;
+            min-width: 140px;
+            margin: 0 auto;
+        }
+
         .empty-state {
             text-align: center;
             padding: 60px 0;
@@ -1152,6 +1162,9 @@
                 border-left: none;
                 border-top: 2px solid var(--border-color);
                 padding-top: 12px;
+            }
+            .accounts-panel--liabilities {
+                padding: 16px;
             }
             .accounts-table-wrap {
                 overflow-x: auto;
@@ -1395,7 +1408,7 @@
                 <div class="section-title">Transactions</div>
                 <span class="toggle-icon collapsed" id="allTransactionsToggle">▼</span>
             </div>
-            <div class="section-content collapsed" id="allTransactionsContent">
+            <div class="section-content" id="allTransactionsContent">
             <div class="transactions-grid rolled-up" id="transactionsGrid">
             <div class="transaction-section">
                 <div class="section-header">
@@ -1463,7 +1476,7 @@
                     <div class="accounts-total"><span>Total</span><span id="totalAssetsValue">$0</span></div>
                 </div>
 
-                <div class="accounts-panel">
+                <div class="accounts-panel accounts-panel--liabilities">
                     <div class="accounts-section-title">Liabilities</div>
                     <div class="accounts-table-wrap">
                         <table class="accounts-table liabilities-table">
@@ -1485,7 +1498,7 @@
             <div class="modal-header">Monthly Income</div>
             <div class="form-group">
                 <label class="form-label">Amount</label>
-                <input type="number" class="form-input" id="incomeInput" placeholder="5000">
+                <input type="text" class="form-input currency-input" id="incomeInput" placeholder="$5,000" inputmode="decimal" autocomplete="off">
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('incomeModal')">Cancel</button>
@@ -1499,7 +1512,7 @@
             <div class="modal-header">Savings Goal</div>
             <div class="form-group">
                 <label class="form-label">Monthly Target</label>
-                <input type="number" class="form-input" id="savingsInput" placeholder="1000">
+                <input type="text" class="form-input currency-input" id="savingsInput" placeholder="$1,000" inputmode="decimal" autocomplete="off">
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('savingsModal')">Cancel</button>
@@ -1517,12 +1530,12 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Amount</label>
-                <input type="number" class="form-input" id="fixedAmountInput" placeholder="1500">
+                <input type="text" class="form-input currency-input" id="fixedAmountInput" placeholder="$1,500" inputmode="decimal" autocomplete="off">
             </div>
-            <div class="btn-group">
-                <button class="btn btn-primary" id="fixedSubmitBtn" onclick="saveFixedExpense()">Save</button>
-                <button class="btn btn-danger" id="fixedDeleteBtn" onclick="removeFixedExpense()" style="display:none;">Remove</button>
+            <div class="btn-group has-danger">
                 <button class="btn" onclick="closeModal('fixedModal')">Cancel</button>
+                <button class="btn btn-danger" id="fixedDeleteBtn" onclick="removeFixedExpense()" style="display:none;">Remove</button>
+                <button class="btn btn-primary" id="fixedSubmitBtn" onclick="saveFixedExpense()">Save</button>
             </div>
         </div>
     </div>
@@ -2667,6 +2680,36 @@
             updateTransactionList(account, transactions, recurringNames);
         }
 
+        
+        function parseCurrencyInput(rawValue) {
+            const sanitized = String(rawValue || '').replace(/[^\d.-]/g, '');
+            const parsed = parseFloat(sanitized);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function formatCurrencyInputValue(rawValue) {
+            const numeric = parseCurrencyInput(rawValue);
+            if (!numeric) return '';
+            const absValue = Math.abs(numeric);
+            const parts = absValue.toLocaleString(undefined, {
+                minimumFractionDigits: absValue % 1 ? 2 : 0,
+                maximumFractionDigits: 2,
+            });
+            return `${numeric < 0 ? '-' : ''}$${parts}`;
+        }
+
+        function attachCurrencyInputFormatting() {
+            document.querySelectorAll('.currency-input').forEach(input => {
+                input.addEventListener('focus', () => {
+                    const numeric = parseCurrencyInput(input.value);
+                    input.value = numeric ? String(numeric) : '';
+                });
+                input.addEventListener('blur', () => {
+                    input.value = formatCurrencyInputValue(input.value);
+                });
+            });
+        }
+
         function getOrdinalSuffix(num) {
             const j = num % 10, k = num % 100;
             if (j === 1 && k !== 11) return 'st';
@@ -2675,8 +2718,8 @@
             return 'th';
         }
 
-        function openIncomeModal() { document.getElementById('incomeInput').value = state.income || ''; document.getElementById('incomeModal').classList.add('active'); toggleSidebar(); }
-        function openSavingsModal() { document.getElementById('savingsInput').value = state.savings || ''; document.getElementById('savingsModal').classList.add('active'); toggleSidebar(); }
+        function openIncomeModal() { document.getElementById('incomeInput').value = formatCurrencyInputValue(state.income); document.getElementById('incomeModal').classList.add('active'); toggleSidebar(); }
+        function openSavingsModal() { document.getElementById('savingsInput').value = formatCurrencyInputValue(state.savings); document.getElementById('savingsModal').classList.add('active'); toggleSidebar(); }
         function openFixedModal(index = null) {
             editingFixedExpenseIndex = index;
             const nameInput = document.getElementById('fixedNameInput');
@@ -2686,7 +2729,7 @@
             const deleteBtn = document.getElementById('fixedDeleteBtn');
             if (index !== null && state.fixedExpenses[index]) {
                 nameInput.value = state.fixedExpenses[index].name;
-                amountInput.value = state.fixedExpenses[index].amount;
+                amountInput.value = formatCurrencyInputValue(state.fixedExpenses[index].amount);
                 header.textContent = 'Edit Fixed Expense';
                 submitBtn.textContent = 'Save';
                 deleteBtn.style.display = 'inline-flex';
@@ -2731,11 +2774,11 @@
             if (modalId === 'renameAccountModal') currentRenameAccountId = null;
             if (modalId === 'accountDetailsModal') currentAccountDetailsId = null;
         }
-        function saveIncome() { const value = parseFloat(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); closeModal('incomeModal'); } }
-        function saveSavings() { const value = parseFloat(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); closeModal('savingsModal'); } }
+        function saveIncome() { const value = parseCurrencyInput(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); closeModal('incomeModal'); } }
+        function saveSavings() { const value = parseCurrencyInput(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); closeModal('savingsModal'); } }
         function saveFixedExpense() {
             const name = document.getElementById('fixedNameInput').value.trim();
-            const amount = parseFloat(document.getElementById('fixedAmountInput').value) || 0;
+            const amount = parseCurrencyInput(document.getElementById('fixedAmountInput').value) || 0;
             if (!name) return;
 
             if (editingFixedExpenseIndex !== null && state.fixedExpenses[editingFixedExpenseIndex]) {
@@ -2817,7 +2860,7 @@
                 const transactionsGrid = document.getElementById('transactionsGrid');
                 if (!transactionsGrid) return;
                 const isRolledUp = transactionsGrid.classList.toggle('rolled-up');
-                content.classList.toggle('collapsed', isRolledUp);
+                content.classList.remove('collapsed');
                 toggle.classList.toggle('collapsed', isRolledUp);
                 return;
             }
@@ -2943,6 +2986,7 @@
                 loadDemoData();
             }
         }
+        attachCurrencyInputFormatting();
         checkConnection();
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
