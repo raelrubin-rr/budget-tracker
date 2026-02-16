@@ -208,7 +208,7 @@
 
         .progress-bar {
             width: 100%;
-            height: 42px;
+            height: 56px;
             background: var(--bg-tertiary);
             border-radius: 16px;
             overflow: hidden;
@@ -235,7 +235,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 800;
             color: var(--text-primary);
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
@@ -301,7 +301,7 @@
         }
 
         .accounts-title {
-            font-size: 18px;
+            font-size: 24px;
             font-weight: 800;
         }
 
@@ -339,20 +339,20 @@
             border-top: 2px solid var(--border-color);
             display: flex;
             justify-content: space-between;
-            font-size: 13px;
-            font-weight: 800;
+            font-size: 24px;
+            font-weight: 900;
         }
 
         .accounts-section-title {
             margin: 10px 0;
-            font-size: 14px;
+            font-size: 16px;
             color: var(--text-secondary);
             font-weight: 800;
             text-transform: uppercase;
         }
 
         .accounts-table { width: 100%; border-collapse: collapse; }
-        .accounts-table th, .accounts-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 13px; }
+        .accounts-table th, .accounts-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px; }
         .accounts-table th:first-child, .accounts-table td:first-child { text-align: left; }
         .accounts-table th:nth-child(2), .accounts-table td:nth-child(2),
         .accounts-table th:nth-child(3), .accounts-table td:nth-child(3) { text-align: right; }
@@ -370,8 +370,9 @@
             cursor: pointer;
             margin-left: 8px;
             line-height: 1;
+            opacity: 0.45;
         }
-        .rename-account-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+        .rename-account-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); opacity: 0.7; }
         
         /* Transactions */
         .transaction-section {
@@ -439,6 +440,29 @@
 
         .section-content.collapsed {
             max-height: 0;
+        }
+
+        .transactions-grid.rolled-up .transaction-body {
+            max-height: 0;
+            border-top: none;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .transactions-grid.rolled-up .transaction-section {
+            height: auto;
+        }
+
+        .transaction-body {
+            flex: 1;
+            min-height: 0;
+            border-top: 2px solid var(--border-color);
+            transition: max-height 0.35s ease, opacity 0.25s ease;
+            max-height: 800px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         .filter-bar {
@@ -975,10 +999,6 @@
     </div>
 
     <div class="container">
-        <header>
-            <h1>Budget</h1>
-        </header>
-
         <div class="card">
             <div class="date-info">
                 <div class="current-date" id="currentDate">Saturday, Feb 14, 2026</div>
@@ -1014,12 +1034,12 @@
                 <span class="toggle-icon" id="allTransactionsToggle">▼</span>
             </div>
             <div class="section-content" id="allTransactionsContent">
-            <div class="transactions-grid">
+            <div class="transactions-grid" id="transactionsGrid">
             <div class="transaction-section">
                 <div class="section-header">
                     <div class="section-title">Credit Card</div>
                 </div>
-                <div class="section-content">
+                <div class="transaction-body">
                     <div class="filter-bar">
                         <input type="text" class="search-input" id="creditSearch" placeholder="Search transactions..." onkeyup="filterTransactions('credit')">
                         <select class="filter-select" id="creditCategoryFilter" onchange="filterTransactions('credit')">
@@ -1041,7 +1061,7 @@
                 <div class="section-header">
                     <div class="section-title">Checking</div>
                 </div>
-                <div class="section-content">
+                <div class="transaction-body">
                     <div class="filter-bar">
                         <input type="text" class="search-input" id="checkingSearch" placeholder="Search transactions..." onkeyup="filterTransactions('checking')">
                         <select class="filter-select" id="checkingTypeFilter" onchange="filterTransactions('checking')">
@@ -2263,6 +2283,16 @@
         function toggleSection(contentId, toggleId) {
             const content = document.getElementById(contentId);
             const toggle = document.getElementById(toggleId);
+            if (!content || !toggle) return;
+
+            if (contentId === 'allTransactionsContent') {
+                const transactionsGrid = document.getElementById('transactionsGrid');
+                if (!transactionsGrid) return;
+                const isRolledUp = transactionsGrid.classList.toggle('rolled-up');
+                toggle.classList.toggle('collapsed', isRolledUp);
+                return;
+            }
+
             if (content.classList.contains('collapsed')) {
                 content.classList.remove('collapsed');
                 toggle.classList.remove('collapsed');
