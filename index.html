@@ -361,7 +361,7 @@
             transition: background 0.2s ease;
         }
         .accounts-table tr.account-row-clickable:hover {
-            background: transparent;
+            background: rgba(255, 255, 255, 0.06);
         }
         .account-name {
             color: var(--text-primary);
@@ -990,6 +990,11 @@
         .holdings-table.liability-details-table th,
         .holdings-table.liability-details-table td {
             padding: 12px 10px;
+            white-space: nowrap;
+        }
+
+        .holdings-table.liability-details-table {
+            table-layout: fixed;
         }
 
         .holdings-table.liability-details-table th:not(:first-child),
@@ -1118,10 +1123,10 @@
 
             <div class="section-header transactions-master-header" onclick="toggleSection('allTransactionsContent', 'allTransactionsToggle')">
                 <div class="section-title">Transactions</div>
-                <span class="toggle-icon" id="allTransactionsToggle">▼</span>
+                <span class="toggle-icon collapsed" id="allTransactionsToggle">▼</span>
             </div>
-            <div class="section-content" id="allTransactionsContent">
-            <div class="transactions-grid" id="transactionsGrid">
+            <div class="section-content collapsed" id="allTransactionsContent">
+            <div class="transactions-grid rolled-up" id="transactionsGrid">
             <div class="transaction-section">
                 <div class="section-header">
                     <div class="section-title">Credit Card</div>
@@ -1245,9 +1250,9 @@
                 <input type="number" class="form-input" id="fixedAmountInput" placeholder="1500">
             </div>
             <div class="btn-group">
-                <button class="btn" onclick="closeModal('fixedModal')">Cancel</button>
+                <button class="btn btn-primary" id="fixedSubmitBtn" onclick="saveFixedExpense()">Save</button>
                 <button class="btn btn-danger" id="fixedDeleteBtn" onclick="removeFixedExpense()" style="display:none;">Remove</button>
-                <button class="btn btn-primary" id="fixedSubmitBtn" onclick="saveFixedExpense()">Add</button>
+                <button class="btn" onclick="closeModal('fixedModal')">Cancel</button>
             </div>
         </div>
     </div>
@@ -2395,7 +2400,7 @@
                 nameInput.value = '';
                 amountInput.value = '';
                 header.textContent = 'Fixed Expense';
-                submitBtn.textContent = 'Add';
+                submitBtn.textContent = 'Save';
                 deleteBtn.style.display = 'none';
             }
             document.getElementById('fixedModal').classList.add('active');
