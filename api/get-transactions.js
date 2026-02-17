@@ -80,12 +80,16 @@ async function fetchInvestmentsHoldings(access_token) {
 
 async function fetchTransactionsWithRetry(access_token, start_date, end_date) {
   const maxAttempts = 4;
+  const unsupportedErrors = new Set(['INVALID_PRODUCT', 'PRODUCTS_NOT_SUPPORTED']);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       return await plaidClient.transactionsGet({ access_token, start_date, end_date });
     } catch (error) {
       const plaidErrorCode = getPlaidErrorCode(error);
+      if (unsupportedErrors.has(plaidErrorCode)) {
+        return null;
+      }
       const shouldRetry = plaidErrorCode === 'PRODUCT_NOT_READY' || plaidErrorCode === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION';
 
       if (!shouldRetry || attempt === maxAttempts) {
@@ -139,7 +143,8 @@ module.exports = async (req, res) => {
       return acc;
     }, {});
 
-    const rawTransactions = response.data.transactions.map((tx) => {
+    const sourceTransactions = response?.data?.transactions || [];
+    const rawTransactions = sourceTransactions.map((tx) => {
       const account = accounts.find((acc) => acc.account_id === tx.account_id);
       const accountType = account?.type === 'credit' ? 'credit' : 'checking';
       const normalizedAmount = accountType === 'credit' ? -Math.abs(tx.amount) : -tx.amount;
