@@ -700,7 +700,7 @@
 
         .transaction-date {
             font-size: 10px;
-            color: var(--text-tertiary);
+            color: var(--text-primary);
             font-weight: 600;
             line-height: 1.2;
         }
@@ -2311,7 +2311,17 @@
             return labelMap[category] || 'Other';
         }
 
+        function normalizeAccountType(rawAccount) {
+            const normalized = String(rawAccount || '').toLowerCase();
+            if (normalized.includes('credit')) return 'credit';
+            if (normalized.includes('check')) return 'checking';
+            if (normalized.includes('depository') || normalized.includes('debit') || normalized.includes('bank') || normalized.includes('savings')) return 'checking';
+            return normalized === 'credit' || normalized === 'checking' ? normalized : '';
+        }
+
         function normalizeTransactionCategory(tx) {
+            const accountType = normalizeAccountType(tx.account || tx.accountType || tx.accountSubType || tx.accountSubtype || tx.accountName || tx.account_name || tx.type);
+            tx.account = accountType || (Number(tx.amount) < 0 ? 'credit' : 'checking');
             if (tx.account === 'checking' && typeof tx.includeInBudget !== 'boolean') tx.includeInBudget = false;
             const category = tx.category || autoCategorize(tx.name);
             tx.category = category;
@@ -3442,6 +3452,18 @@
                 const blockedTarget = event.target.closest('input, select, button, a, .transaction-clickable, .include-plus-btn, .filter-bar, .transaction-list');
                 if (blockedTarget) return;
             }
+
+            const transactionsGrid = document.getElementById('transactionsGrid');
+            if (transactionsGrid && transactionsGrid.classList.contains('rolled-up')) {
+                transactionsGrid.classList.remove('rolled-up');
+                const allTransactionsToggle = document.getElementById('allTransactionsToggle');
+                if (allTransactionsToggle) allTransactionsToggle.classList.remove('collapsed');
+                document.querySelectorAll('.transaction-section').forEach(panel => {
+                    panel.classList.toggle('is-collapsed', panel.id !== sectionId);
+                });
+                return;
+            }
+
             section.classList.toggle('is-collapsed');
         }
 
