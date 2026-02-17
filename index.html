@@ -110,11 +110,11 @@
 
         .date-info {
             text-align: center;
-            margin-bottom: 18px;
-            padding: 18px 16px;
-            border: 1px solid rgba(255,255,255,0.14);
-            border-radius: 16px;
-            background: linear-gradient(160deg, rgba(20, 30, 46, 0.92), rgba(10, 17, 28, 0.92));
+            margin: 0 0 18px;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            background: transparent;
         }
 
         .current-date {
@@ -412,8 +412,8 @@
         
         /* Transactions */
         .transaction-section {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
+            background: transparent;
+            border: none;
             border-radius: 16px;
             margin-bottom: 32px;
             overflow: hidden;
@@ -432,6 +432,12 @@
             align-items: stretch;
         }
 
+        .transactions-wrap {
+            margin-top: 22px;
+            padding-top: 24px;
+            border-top: 2px solid var(--border-color);
+        }
+
         .section-header {
             padding: 24px 28px;
             border-bottom: 2px solid var(--border-color);
@@ -444,7 +450,7 @@
 
         .transactions-master-header {
             border-bottom: none;
-            padding-bottom: 12px;
+            padding: 0 0 12px;
         }
 
         .transactions-master-header .section-title {
@@ -497,7 +503,7 @@
         .transactions-grid.rolled-up .transaction-section {
             height: auto;
             border-bottom: none;
-            box-shadow: inset 0 -2px 0 var(--border-color);
+            box-shadow: none;
         }
 
         .transactions-grid.rolled-up .section-header {
@@ -520,6 +526,7 @@
             border-bottom: 2px solid var(--border-color);
             display: flex;
             gap: 12px;
+            background: var(--bg-secondary);
         }
 
         .search-input, .filter-select {
@@ -549,6 +556,7 @@
             overflow-y: auto;
             min-height: 0;
             flex: 1;
+            background: var(--bg-secondary);
         }
 
         .transaction-list::-webkit-scrollbar {
@@ -1544,6 +1552,11 @@
     </div>
 
     <div class="container">
+        <div class="date-info">
+            <div class="current-date" id="currentDate">Saturday, Feb 14, 2026</div>
+            <div class="days-remaining" id="daysRemaining">Jan 4 – Feb 4 • 18 days remaining</div>
+        </div>
+
         <div class="card">
             <div class="budget-surface">
                 <div class="budget-section">
@@ -1568,22 +1581,14 @@
                 </div>
             </div>
 
-
-
-        </div>
-
-        <div class="date-info">
-            <div class="current-date" id="currentDate">Saturday, Feb 14, 2026</div>
-            <div class="days-remaining" id="daysRemaining">Jan 4 – Feb 4 • 18 days remaining</div>
-        </div>
-
-        <div class="section-header transactions-master-header" onclick="toggleSection('allTransactionsContent', 'allTransactionsToggle')">
-                <div class="section-title">Transactions</div>
-                <span class="toggle-icon collapsed" id="allTransactionsToggle">▼</span>
-            </div>
-            <div class="section-content" id="allTransactionsContent">
-            <div class="transactions-grid rolled-up" id="transactionsGrid">
-            <div class="transaction-section">
+            <div class="transactions-wrap">
+                <div class="section-header transactions-master-header" onclick="toggleSection('allTransactionsContent', 'allTransactionsToggle')">
+                    <div class="section-title">Transactions</div>
+                    <span class="toggle-icon collapsed" id="allTransactionsToggle">▼</span>
+                </div>
+                <div class="section-content" id="allTransactionsContent">
+                    <div class="transactions-grid rolled-up" id="transactionsGrid">
+                        <div class="transaction-section">
                 <div class="section-header">
                     <div class="section-title">Credit Card</div>
                 </div>
@@ -1603,9 +1608,9 @@
                     </div>
                     <div class="transaction-list" id="creditList"></div>
                 </div>
-            </div>
+                        </div>
 
-            <div class="transaction-section">
+                        <div class="transaction-section">
                 <div class="section-header">
                     <div class="section-title">Checking</div>
                 </div>
@@ -1624,8 +1629,9 @@
                     </div>
                     <div class="transaction-list" id="checkingList"></div>
                 </div>
-            </div>
-        </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
