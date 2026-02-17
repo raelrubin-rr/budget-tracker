@@ -110,7 +110,11 @@
 
         .date-info {
             text-align: center;
-            margin-bottom: 24px;
+            margin-bottom: 18px;
+            padding: 18px 16px;
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 16px;
+            background: linear-gradient(160deg, rgba(20, 30, 46, 0.92), rgba(10, 17, 28, 0.92));
         }
 
         .current-date {
@@ -158,7 +162,7 @@
 
         .budget-label {
             font-size: 14px;
-            color: var(--text-secondary);
+            color: var(--text-primary);
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -204,7 +208,7 @@
 
         .progress-label-text {
             font-size: 14px;
-            color: var(--text-secondary);
+            color: var(--text-primary);
             font-weight: 700;
         }
 
@@ -441,6 +445,14 @@
         .transactions-master-header {
             border-bottom: none;
             padding-bottom: 12px;
+        }
+
+        .transactions-master-header .section-title {
+            font-size: 14px;
+            color: var(--text-primary);
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
         }
 
         .section-title {
@@ -1022,10 +1034,7 @@
             gap: 10px;
             align-items: end;
             margin-bottom: 12px;
-            padding: 10px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            background: rgba(255,255,255,0.02);
+            padding: 0;
         }
 
         .account-modal-name-wrap {
@@ -1047,10 +1056,50 @@
 
         .account-modal-toolbar .btn {
             width: auto;
-            min-width: 96px;
-            padding: 10px 14px;
+            min-width: 82px;
+            padding: 10px 12px;
             font-size: 13px;
             margin: 0;
+            white-space: nowrap;
+        }
+
+        .custodian-label-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .custodian-last-updated {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: 0.02em;
+            color: var(--text-tertiary);
+            overflow-wrap: anywhere;
+        }
+
+        .holding-symbol {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .holding-value-main {
+            font-weight: 700;
+        }
+
+        .holding-performance-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .holding-performance-item {
+            min-width: 54px;
+            text-align: right;
         }
 
         .holdings-table {
@@ -1152,6 +1201,10 @@
             .days-remaining {
                 font-size: 16px;
             }
+            .date-info {
+                padding: 14px 12px;
+                margin-bottom: 12px;
+            }
             .budget-grid {
                 grid-template-columns: 1fr;
             }
@@ -1185,6 +1238,9 @@
             .transactions-grid {
                 grid-template-columns: 1fr;
                 gap: 12px;
+            }
+            .transactions-grid.rolled-up {
+                gap: 10px;
             }
             .section-header {
                 padding: 14px 16px;
@@ -1314,13 +1370,15 @@
                 flex-direction: column;
             }
             .account-modal-toolbar {
-                flex-direction: column;
-                align-items: stretch;
+                flex-direction: row;
+                align-items: end;
                 gap: 8px;
-                padding: 8px 10px;
             }
             .account-modal-toolbar .btn {
-                width: 100%;
+                width: auto;
+                min-width: 76px;
+                font-size: 12px;
+                padding: 9px 10px;
             }
             #accountDetailsModal .holdings-table {
                 display: table;
@@ -1353,6 +1411,13 @@
                 margin-left: 0;
                 margin-top: 2px;
                 line-height: 1.2;
+            }
+            .holding-performance-row {
+                gap: 6px;
+                font-size: 10px;
+            }
+            .holding-performance-item {
+                min-width: 46px;
             }
         }
 
@@ -1480,11 +1545,6 @@
 
     <div class="container">
         <div class="card">
-            <div class="date-info">
-                <div class="current-date" id="currentDate">Saturday, Feb 14, 2026</div>
-                <div class="days-remaining" id="daysRemaining">Jan 4 – Feb 4 • 18 days remaining</div>
-            </div>
-
             <div class="budget-surface">
                 <div class="budget-section">
                     <div class="budget-label">Available to Spend</div>
@@ -1509,7 +1569,15 @@
             </div>
 
 
-            <div class="section-header transactions-master-header" onclick="toggleSection('allTransactionsContent', 'allTransactionsToggle')">
+
+        </div>
+
+        <div class="date-info">
+            <div class="current-date" id="currentDate">Saturday, Feb 14, 2026</div>
+            <div class="days-remaining" id="daysRemaining">Jan 4 – Feb 4 • 18 days remaining</div>
+        </div>
+
+        <div class="section-header transactions-master-header" onclick="toggleSection('allTransactionsContent', 'allTransactionsToggle')">
                 <div class="section-title">Transactions</div>
                 <span class="toggle-icon collapsed" id="allTransactionsToggle">▼</span>
             </div>
@@ -1573,7 +1641,7 @@
                     <div class="accounts-table-wrap">
                         <table class="accounts-table">
                             <thead>
-                                <tr><th>Account</th><th>Performance YTD</th><th>Current Value</th></tr>
+                                <tr><th>Account</th><th>Performance YTD</th><th>Value</th></tr>
                             </thead>
                             <tbody id="assetsTableBody"></tbody>
                         </table>
@@ -1586,7 +1654,7 @@
                     <div class="accounts-table-wrap">
                         <table class="accounts-table liabilities-table">
                             <thead>
-                                <tr><th>Account</th><th>Next Payment</th><th>Payment Amount</th><th>Current Value</th></tr>
+                                <tr><th>Account</th><th>Next Payment</th><th>Payment Amount</th><th>Balance</th></tr>
                             </thead>
                             <tbody id="liabilitiesTableBody"></tbody>
                         </table>
@@ -1603,7 +1671,7 @@
             <div class="modal-header">Monthly Income</div>
             <div class="form-group">
                 <label class="form-label">Amount</label>
-                <input type="text" class="form-input currency-input" id="incomeInput" placeholder="$5,000" inputmode="decimal" autocomplete="off">
+                <input type="text" class="form-input currency-input" id="incomeInput" placeholder="$5,000" inputmode="decimal" autocomplete="off" onkeydown="handleEnterSave(event, saveIncome)">
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('incomeModal')">Cancel</button>
@@ -1617,7 +1685,7 @@
             <div class="modal-header">Savings Goal</div>
             <div class="form-group">
                 <label class="form-label">Monthly Target</label>
-                <input type="text" class="form-input currency-input" id="savingsInput" placeholder="$1,000" inputmode="decimal" autocomplete="off">
+                <input type="text" class="form-input currency-input" id="savingsInput" placeholder="$1,000" inputmode="decimal" autocomplete="off" onkeydown="handleEnterSave(event, saveSavings)">
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('savingsModal')">Cancel</button>
@@ -1631,11 +1699,11 @@
             <div class="modal-header" id="fixedModalHeader">Fixed Expense</div>
             <div class="form-group">
                 <label class="form-label">Name</label>
-                <input type="text" class="form-input" id="fixedNameInput" placeholder="Rent">
+                <input type="text" class="form-input" id="fixedNameInput" placeholder="Rent" onkeydown="handleEnterSave(event, saveFixedExpense)">
             </div>
             <div class="form-group">
                 <label class="form-label">Amount</label>
-                <input type="text" class="form-input currency-input" id="fixedAmountInput" placeholder="$1,500" inputmode="decimal" autocomplete="off">
+                <input type="text" class="form-input currency-input" id="fixedAmountInput" placeholder="$1,500" inputmode="decimal" autocomplete="off" onkeydown="handleEnterSave(event, saveFixedExpense)">
             </div>
             <div class="btn-group has-danger fixed-modal-actions">
                 <button class="btn btn-primary" id="fixedSubmitBtn" onclick="saveFixedExpense()">Save</button>
@@ -1650,7 +1718,7 @@
             <div class="modal-header">Budget Period</div>
             <div class="form-group">
                 <label class="form-label">Start Day (1-28)</label>
-                <input type="number" class="form-input" id="budgetDayInput" placeholder="4" min="1" max="28">
+                <input type="number" class="form-input" id="budgetDayInput" placeholder="4" min="1" max="28" onkeydown="handleEnterSave(event, saveBudgetPeriod)">
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('budgetPeriodModal')">Cancel</button>
@@ -1700,7 +1768,7 @@
             <div class="modal-header">Rename Account</div>
             <div class="form-group">
                 <label class="form-label">Account Name</label>
-                <input type="text" class="form-input" id="renameAccountInput" placeholder="Account name">
+                <input type="text" class="form-input" id="renameAccountInput" placeholder="Account name" onkeydown="handleEnterSave(event, saveAccountRename)">
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('renameAccountModal')">Cancel</button>
@@ -1715,7 +1783,7 @@
             <div class="account-modal-toolbar">
                 <div class="account-modal-name-wrap">
                     <label class="form-label">Account Name</label>
-                    <input type="text" class="form-input" id="accountDetailsNameInput" placeholder="Account name">
+                    <input type="text" class="form-input" id="accountDetailsNameInput" placeholder="Account name" onkeydown="handleEnterSave(event, saveAccountDetailsName)">
                 </div>
                 <button class="btn btn-primary" onclick="saveAccountDetailsName()">Save Name</button>
             </div>
@@ -2531,14 +2599,16 @@
 
                 const groups = groupAccountsByCustodian(list);
                 return groups.map(group => {
-                    const groupHeading = `<tr class="custodian-row"><td colspan="${colCount}">${group.custodian}</td></tr>`;
+                    const groupLastUpdated = group.accounts
+                        .map(acc => acc.lastUpdatedAt || state.lastAccountsUpdatedAt)
+                        .find(Boolean);
+                    const groupLastUpdatedLabel = groupLastUpdated
+                        ? new Date(groupLastUpdated).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                        : '--';
+                    const groupHeading = `<tr class="custodian-row"><td colspan="${colCount}"><div class="custodian-label-wrap"><span>${group.custodian}</span><span class="custodian-last-updated">Last updated: ${groupLastUpdatedLabel}</span></div></td></tr>`;
                     const accountRows = group.accounts.map(acc => {
                         const value = Number(acc.balance || 0);
                         const ytdPct = computePerformancePct(acc, kind);
-                        const lastUpdated = acc.lastUpdatedAt || state.lastAccountsUpdatedAt;
-                        const lastUpdatedLabel = lastUpdated
-                            ? new Date(lastUpdated).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                            : '--';
 
                         if (kind === 'asset') totalAssets += Math.max(value, 0);
                         else totalLiabilities += Math.abs(value);
@@ -2548,7 +2618,6 @@
                             return `<tr class="account-row-clickable" onclick="openAccountDetailsModal('${acc.id}', '${kind}')">
                                 <td class="account-cell">
                                     <span class="account-name">${acc.name}</span>
-                                    <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
                                 </td>
                                 <td>${formatShortDate(liabilityDetails.nextPaymentDate)}</td>
                                 <td>${liabilityDetails.paymentAmount ? formatCurrency(liabilityDetails.paymentAmount) : '--'}</td>
@@ -2559,7 +2628,6 @@
                         return `<tr class="account-row-clickable" onclick="openAccountDetailsModal('${acc.id}', '${kind}')">
                             <td class="account-cell">
                                 <span class="account-name">${acc.name}</span>
-                                <div class="account-meta">Last updated: ${lastUpdatedLabel}</div>
                             </td>
                             <td style="color:${ytdPct >= 0 ? 'var(--green)' : 'var(--red)'}">${formatPercent(ytdPct)}</td>
                             <td>${formatCurrency(Math.abs(value))}</td>
@@ -2620,11 +2688,13 @@
                     const liveClass = holdLive !== null && holdLive < 0 ? 'negative' : 'positive';
                     const ytdClass = holdYtd < 0 ? 'negative' : 'positive';
                     return `<tr class="holding-main-row">
-                        <td>${h.symbol || '--'} <span class="account-subtype">${h.name || ''}</span></td>
+                        <td><span class="holding-symbol">${h.symbol || '--'}</span></td>
                         <td class="holding-value-cell">
-                            <div>${formatCurrency(holdValue)}</div>
-                            <div class="holding-performance-item ${liveClass}">C: ${holdLive === null ? '--' : formatPercent(holdLive)}</div>
-                            <div class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</div>
+                            <div class="holding-value-main">${formatCurrency(holdValue)}</div>
+                            <div class="holding-performance-row">
+                                <span class="holding-performance-item ${liveClass}">C: ${holdLive === null ? '--' : formatPercent(holdLive)}</span>
+                                <span class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</span>
+                            </div>
                         </td>
                         <td>${holdWeight.toFixed(1)}%</td>
                     </tr>`;
@@ -2642,6 +2712,7 @@
             if (!nextName) return;
             account.name = nextName;
             updateUI();
+            closeModal('accountDetailsModal');
         }
 
         function openRenameAccountModal(accountId) {
@@ -2834,6 +2905,12 @@
             if (j === 2 && k !== 12) return 'nd';
             if (j === 3 && k !== 13) return 'rd';
             return 'th';
+        }
+
+        function handleEnterSave(event, saveHandler) {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            saveHandler();
         }
 
         function openIncomeModal() { document.getElementById('incomeInput').value = formatCurrencyInputValue(state.income); document.getElementById('incomeModal').classList.add('active'); toggleSidebar(); }
@@ -3075,7 +3152,8 @@
 
                 const data = await response.json();
                 if (!response.ok) {
-                    const errMsg = data?.error || data?.details?.error_message || 'Failed to fetch transactions';
+                    const detailsError = typeof data?.details === 'string' ? data.details : data?.details?.error_message;
+                    const errMsg = data?.error || detailsError || 'Unable to load transactions right now';
                     throw new Error(errMsg);
                 }
                 
@@ -3087,7 +3165,8 @@
                 updateUI();
             } catch (error) {
                 console.error('Error fetching transactions:', error);
-                alert('Connected to Plaid, but failed to load transactions: ' + error.message);
+                const fallbackMessage = 'Connected to Plaid. Transactions are still syncing — please try again in a moment.';
+                alert(error.message ? `Connected to Plaid, but failed to load transactions: ${error.message}` : fallbackMessage);
                 updateUI();
             }
         }
