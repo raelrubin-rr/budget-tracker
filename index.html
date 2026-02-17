@@ -3458,9 +3458,7 @@
                 transactionsGrid.classList.remove('rolled-up');
                 const allTransactionsToggle = document.getElementById('allTransactionsToggle');
                 if (allTransactionsToggle) allTransactionsToggle.classList.remove('collapsed');
-                document.querySelectorAll('.transaction-section').forEach(panel => {
-                    panel.classList.toggle('is-collapsed', panel.id !== sectionId);
-                });
+                section.classList.remove('is-collapsed');
                 return;
             }
 
