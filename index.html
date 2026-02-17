@@ -101,7 +101,7 @@
             background: linear-gradient(160deg, rgba(22, 32, 49, 0.96), rgba(12, 19, 32, 0.96));
             border: 1px solid var(--border-color);
             border-radius: 22px;
-            padding: 36px;
+            padding: 36px 36px 30px;
             margin-bottom: 24px;
             width: 100%;
             box-shadow: 0 24px 40px rgba(0, 0, 0, 0.32);
@@ -358,9 +358,9 @@
             padding: 14px 12px 8px;
             border-top: 2px solid var(--border-color);
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: baseline;
-            gap: 16px;
+            gap: 10px;
             flex-wrap: wrap;
             font-size: 24px;
             font-weight: 900;
@@ -426,12 +426,12 @@
         .accounts-table .custodian-row td {
             border-bottom: none;
             padding-top: 16px;
-            padding-bottom: 6px;
+            padding-bottom: 4px;
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            color: var(--text-tertiary);
+            color: var(--text-primary);
         }
         .accounts-table td.account-cell {
             padding-left: 24px;
@@ -580,6 +580,18 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+        }
+
+        .transaction-section.is-collapsed .transaction-body {
+            max-height: 0;
+            border-top: none;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .transaction-section.is-collapsed .toggle-icon {
+            transform: rotate(-90deg);
         }
 
         .filter-bar {
@@ -1134,9 +1146,9 @@
 
         .custodian-label-wrap {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
+            flex-direction: column;
+            gap: 2px;
+            align-items: flex-start;
         }
 
         .custodian-last-updated {
@@ -1146,6 +1158,73 @@
             letter-spacing: 0.02em;
             color: var(--text-tertiary);
             overflow-wrap: anywhere;
+            margin-top: -1px;
+        }
+
+        .budget-day-scroller {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .budget-day-scroller .form-input {
+            text-align: center;
+            font-weight: 800;
+        }
+
+        .stepper-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            border: 2px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 22px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stepper-btn:hover {
+            border-color: var(--text-secondary);
+        }
+
+        .split-tools {
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-secondary);
+        }
+
+        .split-tools-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .split-tools-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .split-tools-row .form-input {
+            margin: 0;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .split-preview {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.35;
         }
 
         .holding-symbol {
@@ -1300,7 +1379,7 @@
                 right: 12px;
             }
             .card {
-                padding: 16px;
+                padding: 16px 16px 12px;
                 border-radius: 16px;
             }
             .current-date {
@@ -1453,16 +1532,16 @@
             .assets-table td:nth-child(2),
             .liabilities-table th:nth-child(2),
             .liabilities-table td:nth-child(2) {
-                min-width: 72px;
+                min-width: 66px;
                 padding-left: 6px;
-                padding-right: 8px;
+                padding-right: 4px;
             }
             .assets-table th:nth-child(3),
             .assets-table td:nth-child(3),
             .liabilities-table th:nth-child(3),
             .liabilities-table td:nth-child(3) {
-                min-width: 76px;
-                padding-left: 2px;
+                min-width: 82px;
+                padding-left: 4px;
                 padding-right: 4px;
             }
             .accounts-table td.account-cell {
@@ -1478,15 +1557,13 @@
             .accounts-table .custodian-row td {
                 font-size: 12px;
             }
-            .custodian-label-wrap {
-                align-items: flex-start;
-            }
             .custodian-last-updated {
                 display: block;
                 width: 100%;
                 line-height: 1.35;
                 white-space: normal;
                 overflow-wrap: anywhere;
+                margin-top: 0;
             }
             .liabilities-table th:nth-child(2) {
                 white-space: normal;
@@ -1554,6 +1631,22 @@
             #accountDetailsModal .holdings-table td:nth-child(3) {
                 width: 31%;
             }
+            #accountDetailsModal .holdings-table th:nth-child(2),
+            #accountDetailsModal .holdings-table td:nth-child(2) {
+                padding-right: 2px;
+            }
+            #accountDetailsModal .holdings-table th:nth-child(3),
+            #accountDetailsModal .holdings-table td:nth-child(3) {
+                padding-left: 2px;
+            }
+            #accountDetailsModal .holdings-table.liability-details-table th:nth-child(2),
+            #accountDetailsModal .holdings-table.liability-details-table td:nth-child(2) {
+                width: 29%;
+            }
+            #accountDetailsModal .holdings-table.liability-details-table th:nth-child(3),
+            #accountDetailsModal .holdings-table.liability-details-table td:nth-child(3) {
+                width: 33%;
+            }
             .holdings-table td .account-subtype {
                 display: block;
                 margin-left: 0;
@@ -1566,6 +1659,13 @@
             }
             .holding-performance-item {
                 min-width: 46px;
+            }
+            .split-tools-row {
+                flex-wrap: wrap;
+            }
+            .stepper-btn {
+                width: 38px;
+                height: 38px;
             }
         }
 
@@ -1728,9 +1828,10 @@
                 </div>
                 <div class="section-content" id="allTransactionsContent">
                     <div class="transactions-grid rolled-up" id="transactionsGrid">
-                        <div class="transaction-section">
-                <div class="section-header">
+                        <div class="transaction-section is-collapsed" id="creditSection">
+                <div class="section-header" onclick="toggleTransactionSection('creditSection')">
                     <div class="section-title">Credit Card</div>
+                    <span class="toggle-icon">▼</span>
                 </div>
                 <div class="transaction-body">
                     <div class="filter-bar">
@@ -1750,9 +1851,10 @@
                 </div>
                         </div>
 
-                        <div class="transaction-section">
-                <div class="section-header">
+                        <div class="transaction-section is-collapsed" id="checkingSection">
+                <div class="section-header" onclick="toggleTransactionSection('checkingSection')">
                     <div class="section-title">Checking</div>
+                    <span class="toggle-icon">▼</span>
                 </div>
                 <div class="transaction-body">
                     <div class="filter-bar">
@@ -1863,8 +1965,12 @@
         <div class="modal-content">
             <div class="modal-header">Budget Period</div>
             <div class="form-group">
-                <label class="form-label">Start Day (1-28)</label>
-                <input type="number" class="form-input" id="budgetDayInput" placeholder="4" min="1" max="28" onkeydown="handleEnterSave(event, saveBudgetPeriod)">
+                <label class="form-label">Start Day (1-31)</label>
+                <div class="budget-day-scroller">
+                    <button type="button" class="stepper-btn" onclick="adjustBudgetDay(-1)" aria-label="Decrease start day">−</button>
+                    <input type="number" class="form-input" id="budgetDayInput" placeholder="4" min="1" max="31" onkeydown="handleEnterSave(event, saveBudgetPeriod)">
+                    <button type="button" class="stepper-btn" onclick="adjustBudgetDay(1)" aria-label="Increase start day">+</button>
+                </div>
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('budgetPeriodModal')">Cancel</button>
@@ -1901,6 +2007,14 @@
             <div class="form-group" id="manualAmountGroup">
                 <label class="form-label">Manual Reimbursement</label>
                 <input type="number" class="form-input" id="reimbursableAmountInput" placeholder="0.00" step="0.01">
+                <div class="split-tools">
+                    <div class="split-tools-title">Split by attendees</div>
+                    <div class="split-tools-row">
+                        <span style="font-size:12px;color:var(--text-secondary);font-weight:700;">People</span>
+                        <input type="number" class="form-input" id="splitPeopleInput" min="2" step="1" placeholder="2">
+                    </div>
+                    <div class="split-preview" id="splitPreviewText">Enter people count to auto-calculate reimbursement share.</div>
+                </div>
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('reimbursableModal')">Cancel</button>
@@ -3087,6 +3201,13 @@
         }
         function openBudgetPeriodModal() { document.getElementById('budgetDayInput').value = state.budgetStartDay || 4; document.getElementById('budgetPeriodModal').classList.add('active'); toggleSidebar(); }
 
+        function adjustBudgetDay(delta) {
+            const input = document.getElementById('budgetDayInput');
+            const current = parseInt(input.value, 10) || state.budgetStartDay || 4;
+            const next = Math.min(31, Math.max(1, current + delta));
+            input.value = next;
+        }
+
         function openReimbursableModal(index) {
             currentReimbursableIndex = index;
             const tx = state.transactions[index];
@@ -3104,6 +3225,31 @@
                 document.getElementById('reimbursableAmountInput').value = tx.reimbursable || '';
                 document.getElementById('manualAmountGroup').style.display = 'block';
             }
+
+            const splitPeopleInput = document.getElementById('splitPeopleInput');
+            const splitPreviewText = document.getElementById('splitPreviewText');
+            splitPeopleInput.value = tx.splitPeople || '';
+
+            const updateSplitPreview = () => {
+                const people = parseInt(splitPeopleInput.value, 10);
+                if (!people || people < 2) {
+                    splitPreviewText.textContent = 'Enter people count to auto-calculate reimbursement share.';
+                    return;
+                }
+                const share = Math.abs(tx.amount || 0) / people;
+                splitPreviewText.textContent = `${people} people → ${formatCurrency(share)} each`;
+            };
+
+            splitPeopleInput.oninput = () => {
+                updateSplitPreview();
+                if (depositSelect.value) return;
+                const people = parseInt(splitPeopleInput.value, 10);
+                if (people && people >= 2) {
+                    document.getElementById('reimbursableAmountInput').value = (Math.abs(tx.amount || 0) / people).toFixed(2);
+                }
+            };
+
+            updateSplitPreview();
             depositSelect.onchange = function() {
                 document.getElementById('manualAmountGroup').style.display = this.value ? 'none' : 'block';
             };
@@ -3145,15 +3291,17 @@
             updateUI();
             closeModal('fixedModal');
         }
-        function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 28) { state.budgetStartDay = day; updateUI(); closeModal('budgetPeriodModal'); } }
+        function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 31) { state.budgetStartDay = day; updateUI(); closeModal('budgetPeriodModal'); } }
 
         function saveReimbursable() {
             if (currentReimbursableIndex !== null) {
                 const linkedDepositIndex = document.getElementById('linkedDepositSelect').value;
                 const category = document.getElementById('categorySelect').value;
+                const splitPeople = parseInt(document.getElementById('splitPeopleInput').value, 10);
                 const targetTx = state.transactions[currentReimbursableIndex];
                 const maxReimbursable = Math.abs(targetTx.amount || 0);
                 targetTx.category = category;
+                targetTx.splitPeople = splitPeople >= 2 ? splitPeople : null;
 
                 if (linkedDepositIndex) {
                     const depositAmount = Math.max(0, state.transactions[parseInt(linkedDepositIndex)].amount || 0);
@@ -3214,6 +3362,12 @@
                 content.classList.add('collapsed');
                 toggle.classList.add('collapsed');
             }
+        }
+
+        function toggleTransactionSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (!section) return;
+            section.classList.toggle('is-collapsed');
         }
 
         // Plaid Integration
