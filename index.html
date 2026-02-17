@@ -411,15 +411,15 @@
 
         .liabilities-table th:nth-child(2),
         .liabilities-table td:nth-child(2) {
-            width: 14%;
-            padding-left: 4px;
-            padding-right: 0;
+            width: 20%;
+            padding-left: 10px;
+            padding-right: 4px;
         }
 
         .liabilities-table th:nth-child(3),
         .liabilities-table td:nth-child(3) {
-            width: 26%;
-            padding-left: 0;
+            width: 20%;
+            padding-left: 10px;
             padding-right: 4px;
         }
         .accounts-table tbody tr:last-child td { border-bottom: none; }
@@ -1102,7 +1102,7 @@
             display: flex;
             gap: 10px;
             align-items: end;
-            margin-bottom: 12px;
+            margin-bottom: 20px;
             padding: 0;
         }
 
@@ -1170,7 +1170,7 @@
 
         .holding-performance-item {
             display: block;
-            min-width: 84px;
+            min-width: 64px;
             text-align: right;
         }
 
@@ -1178,6 +1178,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 8px;
+            table-layout: fixed;
         }
 
         .holdings-table th,
@@ -1191,6 +1192,7 @@
         .holdings-table th:first-child,
         .holdings-table td:first-child {
             text-align: left;
+            width: 56%;
         }
 
         .holdings-table th {
@@ -1256,12 +1258,12 @@
 
         .holdings-table td:nth-child(2),
         .holdings-table th:nth-child(2) {
-            width: 24%;
+            width: 22%;
         }
 
         .holdings-table td:nth-child(3),
         .holdings-table th:nth-child(3) {
-            width: 24%;
+            width: 22%;
         }
 
         .btn--compact {
@@ -1449,6 +1451,20 @@
             .accounts-table .custodian-row td {
                 font-size: 12px;
             }
+            .custodian-label-wrap {
+                align-items: flex-start;
+            }
+            .custodian-last-updated {
+                display: block;
+                width: 100%;
+                line-height: 1.35;
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
+            .liabilities-table th:nth-child(2) {
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
             .accounts-total {
                 font-size: 21px;
             }
@@ -1499,13 +1515,13 @@
             }
             #accountDetailsModal .holdings-table th:first-child,
             #accountDetailsModal .holdings-table td:first-child {
-                width: 34%;
+                width: 38%;
             }
             #accountDetailsModal .holdings-table th:nth-child(2),
             #accountDetailsModal .holdings-table td:nth-child(2),
             #accountDetailsModal .holdings-table th:nth-child(3),
             #accountDetailsModal .holdings-table td:nth-child(3) {
-                width: 33%;
+                width: 31%;
             }
             .holdings-table td .account-subtype {
                 display: block;
@@ -1753,7 +1769,7 @@
                     <div class="accounts-table-wrap">
                         <table class="accounts-table liabilities-table">
                             <thead>
-                                <tr><th>Account</th><th>Interest Rate</th><th>Balance</th></tr>
+                                <tr><th>Account</th><th>Interest<br>Rate</th><th>Balance</th></tr>
                             </thead>
                             <tbody id="liabilitiesTableBody"></tbody>
                         </table>
@@ -2791,7 +2807,7 @@
                             <div class="holding-value-main">${formatCurrency(holdValue)}</div>
                             <div class="holding-performance-row">
                                 <span class="holding-performance-item ${liveClass}">C: ${holdLive === null ? '--' : formatPercent(holdLive)}</span>
-                                <span class="holding-performance-item ${ytdClass}">YTD: ${formatPercent(holdYtd)}</span>
+                                <span class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</span>
                             </div>
                         </td>
                         <td>${holdWeight.toFixed(1)}%</td>
