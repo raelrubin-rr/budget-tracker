@@ -119,16 +119,18 @@
         }
 
         .current-date {
-            font-size: 32px;
+            font-size: 42px;
             color: var(--text-primary);
-            font-weight: 700;
-            margin-bottom: 8px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            letter-spacing: -0.02em;
         }
 
         .days-remaining {
-            font-size: 22px;
+            font-size: 28px;
             color: var(--text-secondary);
-            font-weight: 600;
+            font-weight: 700;
+            letter-spacing: -0.01em;
         }
 
         /* Budget Sections Grid */
@@ -373,7 +375,7 @@
         }
 
         .accounts-table { width: 100%; border-collapse: collapse; }
-        .accounts-table th, .accounts-table td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px; }
+        .accounts-table th, .accounts-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px; }
         .accounts-table th:first-child, .accounts-table td:first-child { text-align: left; }
         .accounts-table th:not(:first-child), .accounts-table td:not(:first-child) { text-align: right; }
         .accounts-table tbody tr:last-child td { border-bottom: none; }
@@ -439,10 +441,16 @@
             border-top: 2px solid var(--border-color);
         }
 
-        .transactions-wrap .transaction-section,
+        .transactions-wrap .transaction-section {
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            background: linear-gradient(180deg, rgba(16, 24, 38, 0.96), rgba(12, 18, 29, 0.96));
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.22);
+            overflow: hidden;
+        }
+
         .transactions-wrap .section-header,
         .transactions-wrap .transaction-body {
-            border: none;
             box-shadow: none;
             background: transparent;
         }
@@ -1128,7 +1136,7 @@
 
         .holdings-table th,
         .holdings-table td {
-            padding: 10px 0;
+            padding: 12px 8px;
             border-bottom: 1px solid var(--border-color);
             font-size: 13px;
             text-align: right;
@@ -1136,7 +1144,7 @@
 
         .holdings-table th:first-child,
         .holdings-table td:first-child {
-            text-align: left;
+            text-align: right;
         }
 
         .holdings-table th {
@@ -1214,10 +1222,10 @@
                 border-radius: 16px;
             }
             .current-date {
-                font-size: 24px;
+                font-size: 30px;
             }
             .days-remaining {
-                font-size: 16px;
+                font-size: 20px;
             }
             .date-info {
                 padding: 0;
@@ -1447,7 +1455,7 @@
                 padding: 12px;
             }
             .current-date {
-                font-size: 20px;
+                font-size: 26px;
             }
             .budget-value {
                 font-size: 34px;
