@@ -405,22 +405,22 @@
         .assets-table th:nth-child(3),
         .assets-table td:nth-child(3) {
             width: 20%;
-            padding-left: 10px;
-            padding-right: 4px;
+            padding-left: 8px;
+            padding-right: 2px;
         }
 
         .liabilities-table th:nth-child(2),
         .liabilities-table td:nth-child(2) {
             width: 20%;
-            padding-left: 10px;
-            padding-right: 4px;
+            padding-left: 8px;
+            padding-right: 2px;
         }
 
         .liabilities-table th:nth-child(3),
         .liabilities-table td:nth-child(3) {
             width: 20%;
-            padding-left: 10px;
-            padding-right: 4px;
+            padding-left: 8px;
+            padding-right: 2px;
         }
         .accounts-table tbody tr:last-child td { border-bottom: none; }
         .accounts-table .custodian-row td {
@@ -563,12 +563,12 @@
 
         .transactions-grid.rolled-up .transaction-section {
             height: auto;
-            border-bottom: none;
-            box-shadow: none;
+            border-bottom: 2px solid rgba(126, 140, 165, 0.6);
+            box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.1);
         }
 
         .transactions-grid.rolled-up .section-header {
-            border-bottom: none;
+            border-bottom: 2px solid rgba(126, 140, 165, 0.5);
         }
 
         .transaction-body {
@@ -1212,10 +1212,15 @@
         .holdings-table td.negative { color: var(--red); }
 
         .holding-value-cell {
+            text-align: right;
+        }
+
+        .holding-value-stack {
             display: flex;
             flex-direction: column;
             align-items: flex-end;
             gap: 2px;
+            width: 100%;
         }
 
         .holding-main-row td {
@@ -1438,6 +1443,28 @@
                 min-width: 84px;
                 overflow-wrap: anywhere;
             }
+            .assets-table th:first-child,
+            .assets-table td:first-child,
+            .liabilities-table th:first-child,
+            .liabilities-table td:first-child {
+                width: 40%;
+            }
+            .assets-table th:nth-child(2),
+            .assets-table td:nth-child(2),
+            .liabilities-table th:nth-child(2),
+            .liabilities-table td:nth-child(2) {
+                min-width: 72px;
+                padding-left: 6px;
+                padding-right: 8px;
+            }
+            .assets-table th:nth-child(3),
+            .assets-table td:nth-child(3),
+            .liabilities-table th:nth-child(3),
+            .liabilities-table td:nth-child(3) {
+                min-width: 76px;
+                padding-left: 2px;
+                padding-right: 4px;
+            }
             .accounts-table td.account-cell {
                 padding-left: 18px;
             }
@@ -1462,6 +1489,10 @@
                 overflow-wrap: anywhere;
             }
             .liabilities-table th:nth-child(2) {
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
+            .assets-table th:nth-child(2) {
                 white-space: normal;
                 overflow-wrap: anywhere;
             }
@@ -1756,7 +1787,7 @@
                     <div class="accounts-table-wrap">
                         <table class="accounts-table">
                             <thead>
-                                <tr><th>Account</th><th>Performance YTD</th><th>Value</th></tr>
+                                <tr><th>Account</th><th>Performance<br>YTD</th><th>Value</th></tr>
                             </thead>
                             <tbody id="assetsTableBody"></tbody>
                         </table>
@@ -2718,7 +2749,7 @@
                         .map(acc => acc.lastUpdatedAt || state.lastAccountsUpdatedAt)
                         .find(Boolean);
                     const groupLastUpdatedLabel = groupLastUpdated
-                        ? new Date(groupLastUpdated).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                        ? new Date(groupLastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                         : '--';
                     const groupHeading = `<tr class="custodian-row"><td colspan="${colCount}"><div class="custodian-label-wrap"><span>${group.custodian}</span><span class="custodian-last-updated">Last updated: ${groupLastUpdatedLabel}</span></div></td></tr>`;
                     const accountRows = group.accounts.map(acc => {
@@ -2804,10 +2835,12 @@
                     return `<tr class="holding-main-row">
                         <td><span class="holding-symbol">${h.symbol || '--'}</span></td>
                         <td class="holding-value-cell">
-                            <div class="holding-value-main">${formatCurrency(holdValue)}</div>
-                            <div class="holding-performance-row">
-                                <span class="holding-performance-item ${liveClass}">C: ${holdLive === null ? '--' : formatPercent(holdLive)}</span>
-                                <span class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</span>
+                            <div class="holding-value-stack">
+                                <div class="holding-value-main">${formatCurrency(holdValue)}</div>
+                                <div class="holding-performance-row">
+                                    <span class="holding-performance-item ${liveClass}">C: ${holdLive === null ? '--' : formatPercent(holdLive)}</span>
+                                    <span class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</span>
+                                </div>
                             </div>
                         </td>
                         <td>${holdWeight.toFixed(1)}%</td>
