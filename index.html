@@ -128,7 +128,7 @@
 
         .days-remaining {
             font-size: 28px;
-            color: var(--text-secondary);
+            color: var(--text-primary);
             font-weight: 700;
             letter-spacing: -0.01em;
         }
@@ -378,6 +378,50 @@
         .accounts-table th, .accounts-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px; }
         .accounts-table th:first-child, .accounts-table td:first-child { text-align: left; }
         .accounts-table th:not(:first-child), .accounts-table td:not(:first-child) { text-align: right; }
+        .assets-table,
+        .liabilities-table {
+            table-layout: fixed;
+        }
+
+        .assets-table th,
+        .assets-table td,
+        .liabilities-table th,
+        .liabilities-table td {
+            white-space: nowrap;
+        }
+
+        .assets-table th:first-child,
+        .assets-table td:first-child {
+            width: 40%;
+        }
+
+        .liabilities-table th:first-child,
+        .liabilities-table td:first-child {
+            width: 60%;
+        }
+
+        .assets-table th:nth-child(2),
+        .assets-table td:nth-child(2),
+        .assets-table th:nth-child(3),
+        .assets-table td:nth-child(3) {
+            width: 20%;
+            padding-left: 10px;
+            padding-right: 4px;
+        }
+
+        .liabilities-table th:nth-child(2),
+        .liabilities-table td:nth-child(2) {
+            width: 14%;
+            padding-left: 4px;
+            padding-right: 0;
+        }
+
+        .liabilities-table th:nth-child(3),
+        .liabilities-table td:nth-child(3) {
+            width: 26%;
+            padding-left: 0;
+            padding-right: 4px;
+        }
         .accounts-table tbody tr:last-child td { border-bottom: none; }
         .accounts-table .custodian-row td {
             border-bottom: none;
@@ -1117,14 +1161,16 @@
             display: flex;
             flex-direction: column;
             align-items: flex-end;
-            gap: 2px;
-            margin-top: 4px;
+            width: 100%;
+            gap: 1px;
+            margin-top: 2px;
             font-size: 11px;
             font-weight: 600;
         }
 
         .holding-performance-item {
-            min-width: 0;
+            display: block;
+            min-width: 84px;
             text-align: right;
         }
 
@@ -1144,7 +1190,7 @@
 
         .holdings-table th:first-child,
         .holdings-table td:first-child {
-            text-align: right;
+            text-align: left;
         }
 
         .holdings-table th {
@@ -1186,7 +1232,7 @@
 
         .holdings-table.liability-details-table th,
         .holdings-table.liability-details-table td {
-            padding: 12px 10px;
+            padding: 12px 6px;
             white-space: normal;
             overflow-wrap: anywhere;
         }
@@ -1198,6 +1244,35 @@
         .holdings-table.liability-details-table th:not(:first-child),
         .holdings-table.liability-details-table td:not(:first-child) {
             text-align: right;
+        }
+
+        .holdings-table th:nth-child(2),
+        .holdings-table td:nth-child(2),
+        .holdings-table th:nth-child(3),
+        .holdings-table td:nth-child(3) {
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+
+        .holdings-table td:nth-child(2),
+        .holdings-table th:nth-child(2) {
+            width: 24%;
+        }
+
+        .holdings-table td:nth-child(3),
+        .holdings-table th:nth-child(3) {
+            width: 24%;
+        }
+
+        .btn--compact {
+            width: auto;
+            min-width: 120px;
+            padding: 12px 18px;
+        }
+
+        .btn-group .btn.btn--compact {
+            flex: 0 0 auto;
+            margin: 0 auto;
         }
 
         @media (max-width: 768px) {
@@ -1678,7 +1753,7 @@
                     <div class="accounts-table-wrap">
                         <table class="accounts-table liabilities-table">
                             <thead>
-                                <tr><th>Account</th><th>Next Payment</th><th>Payment Amount</th><th>Balance</th></tr>
+                                <tr><th>Account</th><th>Interest Rate</th><th>Balance</th></tr>
                             </thead>
                             <tbody id="liabilitiesTableBody"></tbody>
                         </table>
@@ -1816,7 +1891,7 @@
                 <tbody id="accountHoldingsBody"></tbody>
             </table>
             <div class="btn-group">
-                <button class="btn" onclick="closeModal('accountDetailsModal')">Close</button>
+                <button class="btn btn--compact" onclick="closeModal('accountDetailsModal')">Close</button>
             </div>
         </div>
     </div>
@@ -2618,7 +2693,7 @@
             };
 
             const buildRows = (list, kind) => {
-                const colCount = kind === 'liability' ? 4 : 3;
+                const colCount = 3;
                 if (!list.length) return `<tr><td colspan="${colCount}" class="empty-state">No linked ${kind} accounts yet.</td></tr>`;
 
                 const groups = groupAccountsByCustodian(list);
@@ -2643,8 +2718,7 @@
                                 <td class="account-cell">
                                     <span class="account-name">${acc.name}</span>
                                 </td>
-                                <td>${formatShortDate(liabilityDetails.nextPaymentDate)}</td>
-                                <td>${liabilityDetails.paymentAmount ? formatCurrency(liabilityDetails.paymentAmount) : '--'}</td>
+                                <td>${liabilityDetails.interestRate ? `${liabilityDetails.interestRate.toFixed(2)}%` : '--'}</td>
                                 <td>${formatCurrency(-Math.abs(value))}</td>
                             </tr>`;
                         }
@@ -2717,7 +2791,7 @@
                             <div class="holding-value-main">${formatCurrency(holdValue)}</div>
                             <div class="holding-performance-row">
                                 <span class="holding-performance-item ${liveClass}">C: ${holdLive === null ? '--' : formatPercent(holdLive)}</span>
-                                <span class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</span>
+                                <span class="holding-performance-item ${ytdClass}">YTD: ${formatPercent(holdYtd)}</span>
                             </div>
                         </td>
                         <td>${holdWeight.toFixed(1)}%</td>

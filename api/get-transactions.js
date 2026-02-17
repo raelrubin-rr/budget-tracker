@@ -36,12 +36,14 @@ function buildFallbackHoldingForAccount(account) {
   }];
 }
 
-function buildLiabilityDetails(account) {
+function buildLiabilityDetails(account, aprByAccountId = {}) {
   const metric = `${account?.account_id || ''}${account?.subtype || ''}`.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
   const isLiability = ['credit', 'loan', 'liability'].includes((account?.type || '').toLowerCase());
   if (!isLiability) return {};
 
-  const interestRate = Number((8 + ((metric % 120) / 10)).toFixed(2));
+  const fallbackInterestRate = Number((8 + ((metric % 120) / 10)).toFixed(2));
+  const plaidInterestRate = Number(aprByAccountId[account?.account_id]);
+  const interestRate = Number.isFinite(plaidInterestRate) ? plaidInterestRate : fallbackInterestRate;
   const termMonths = 12 + ((metric % 84));
   const now = new Date();
   const nextPaymentDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.max(1, (metric % 28) + 1));
@@ -75,6 +77,56 @@ async function fetchInvestmentsHoldings(access_token) {
 
     throw error;
   }
+}
+
+async function fetchLiabilitiesData(access_token) {
+  try {
+    const liabilitiesResponse = await plaidClient.liabilitiesGet({ access_token });
+    return liabilitiesResponse.data?.liabilities || {};
+  } catch (error) {
+    const plaidErrorCode = getPlaidErrorCode(error);
+    const unsupportedErrors = new Set([
+      'INVALID_PRODUCT',
+      'PRODUCTS_NOT_SUPPORTED',
+      'NO_LIABILITY_ACCOUNTS',
+      'PRODUCT_NOT_READY',
+    ]);
+
+    if (unsupportedErrors.has(plaidErrorCode)) {
+      return {};
+    }
+
+    throw error;
+  }
+}
+
+function buildLiabilityAprByAccountId(liabilities = {}) {
+  const aprByAccountId = {};
+
+  (liabilities.credit || []).forEach((entry) => {
+    const apr = Number(entry?.aprs?.[0]?.apr_percentage);
+    if (entry?.account_id && Number.isFinite(apr)) {
+      aprByAccountId[entry.account_id] = Number(apr.toFixed(2));
+    }
+  });
+
+  (liabilities.student || []).forEach((entry) => {
+    (entry?.loans || []).forEach((loan) => {
+      const apr = Number(loan?.interest_rate_percentage);
+      if (loan?.account_id && Number.isFinite(apr)) {
+        aprByAccountId[loan.account_id] = Number(apr.toFixed(2));
+      }
+    });
+  });
+
+  (liabilities.mortgage || []).forEach((entry) => {
+    const apr = Number(entry?.interest_rate?.percentage);
+    if (entry?.account_id && Number.isFinite(apr)) {
+      aprByAccountId[entry.account_id] = Number(apr.toFixed(2));
+    }
+  });
+
+  return aprByAccountId;
 }
 
 
@@ -132,6 +184,8 @@ module.exports = async (req, res) => {
     const response = await fetchTransactionsWithRetry(access_token, start_date, end_date);
     const accountsResponse = await plaidClient.accountsGet({ access_token });
     const investmentsData = await fetchInvestmentsHoldings(access_token);
+    const liabilitiesData = await fetchLiabilitiesData(access_token);
+    const aprByAccountId = buildLiabilityAprByAccountId(liabilitiesData);
     const accounts = accountsResponse.data.accounts;
     const securitiesById = (investmentsData.securities || []).reduce((acc, security) => {
       acc[security.security_id] = security;
@@ -202,7 +256,7 @@ module.exports = async (req, res) => {
           subtype: acc.subtype,
           balance: acc.balances.current,
           holdings: mappedHoldings,
-          ...buildLiabilityDetails(acc),
+          ...buildLiabilityDetails(acc, aprByAccountId),
         };
       }),
     });
