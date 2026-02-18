@@ -3512,7 +3512,6 @@
                 const response = await fetch('/api/create-link-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ redirect_uri: window.location.origin + '/app/' }),
                 });
 
                 const data = await response.json();
@@ -3520,7 +3519,8 @@
                     const detailsError =
                         data?.message ||
                         (typeof data?.details === 'string' ? data.details : (data?.details?.error_message || data?.details?.display_message || data?.details?.error_code));
-                    throw new Error(detailsError || data?.error || 'Failed to create link token');
+                    const guidance = data?.help ? ` ${data.help}` : '';
+                    throw new Error((detailsError || data?.error || 'Failed to create link token') + guidance);
                 }
                 
                 plaidHandler = Plaid.create({
