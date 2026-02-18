@@ -54,19 +54,35 @@ module.exports = async (req, res) => {
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from(BUDGET_STATE_TABLE)
-      .select('profile_id, cycle_id, payload')
+      .select('profile_id, cycle_id, payload, updated_at')
       .eq('profile_id', profileId)
       .maybeSingle();
 
     if (error) throw error;
-    if (!data) return res.status(200).json({ state: emptyPayload(), found: false });
+    let resolvedRow = data;
 
-    let payload = normalizePayload(data.payload);
+    if (!resolvedRow) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from(BUDGET_STATE_TABLE)
+        .select('profile_id, cycle_id, payload, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (fallbackError) throw fallbackError;
+      resolvedRow = fallbackData || null;
+    }
+
+    if (!resolvedRow) return res.status(200).json({ state: emptyPayload(), found: false });
+
+    const payload = normalizePayload(resolvedRow.payload);
 
     return res.status(200).json({
       state: payload,
       found: true,
-      cycleId: cycleId || data.cycle_id || null,
+      profileId: resolvedRow.profile_id,
+      recoveredProfile: resolvedRow.profile_id !== profileId,
+      cycleId: cycleId || resolvedRow.cycle_id || null,
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to load state', details: error.message || 'Unknown error' });
