@@ -53,6 +53,25 @@ function ruleBasedCategory(transaction) {
   return 'other';
 }
 
+
+function cleanTransactionName(name) {
+  const base = String(name || '').replace(/\s+/g, ' ').trim();
+  if (!base) return 'Transaction';
+
+  const cleaned = base
+    .replace(/\b\d{3,}\b/g, '')
+    .replace(/\b(?:pos|ach|dbt|debit|credit|purchase|payment)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const normalized = cleaned || base;
+  return normalized
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => (word.length <= 3 ? word.toUpperCase() : `${word[0].toUpperCase()}${word.slice(1).toLowerCase()}`))
+    .join(' ');
+}
+
 async function categorizeWithOpenAI(transactions) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || !transactions.length) return null;
@@ -66,13 +85,13 @@ async function categorizeWithOpenAI(transactions) {
       {
         role: 'system',
         content:
-          'You categorize bank transactions. Return JSON only. Allowed categories: groceries, dining, transportation, entertainment, shopping, subscription, other.',
+          'You categorize bank transactions and clean merchant labels. Return JSON only. Allowed categories: groceries, dining, transportation, entertainment, shopping, subscription, other.',
       },
       {
         role: 'user',
         content: JSON.stringify({
           instructions:
-            'For each transaction index, choose the best allowed category based on merchant, name, amount sign, and plaid categories.',
+            'For each transaction index, choose the best allowed category and provide a short cleaned displayName.',
           transactions: transactions.map((tx, index) => ({
             index,
             name: tx.name,
@@ -83,7 +102,7 @@ async function categorizeWithOpenAI(transactions) {
             personal_finance_category: tx.personal_finance_category,
           })),
           output_shape: {
-            categories: [{ index: 0, category: 'dining' }],
+            categories: [{ index: 0, category: 'dining', displayName: 'Starbucks' }],
           },
         }),
       },
@@ -114,10 +133,13 @@ async function categorizeWithOpenAI(transactions) {
   const map = new Map();
   parsed.categories.forEach((item) => {
     if (!Number.isInteger(item?.index)) return;
-    map.set(item.index, normalizeCategory(item.category));
+    map.set(item.index, {
+      category: normalizeCategory(item.category),
+      displayName: cleanTransactionName(item.displayName || transactions[item.index]?.name),
+    });
   });
 
-  return transactions.map((tx, index) => map.get(index) || ruleBasedCategory(tx));
+  return transactions.map((tx, index) => map.get(index) || null);
 }
 
 async function categorizeTransactions(transactions) {
@@ -129,10 +151,12 @@ async function categorizeTransactions(transactions) {
   }
 
   return transactions.map((transaction, index) => {
-    const category = aiCategories?.[index] || ruleBasedCategory(transaction);
+    const aiResult = aiCategories?.[index];
+    const category = aiResult?.category || ruleBasedCategory(transaction);
     const meta = CATEGORY_META[category] || CATEGORY_META.other;
     return {
       ...transaction,
+      displayName: aiResult?.displayName || cleanTransactionName(transaction.name),
       category,
       categoryLabel: meta.label,
       categoryIcon: meta.icon,
@@ -144,4 +168,5 @@ module.exports = {
   CATEGORY_META,
   categorizeTransactions,
   normalizeCategory,
+  cleanTransactionName,
 };

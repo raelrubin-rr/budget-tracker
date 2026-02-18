@@ -77,12 +77,52 @@ function buildLiabilityDetails(account, liabilityByAccountId = {}) {
   const plaidPaymentAmount = Number(plaidLiability.paymentAmount);
   const paymentAmount = Number.isFinite(plaidPaymentAmount) ? Number(plaidPaymentAmount.toFixed(2)) : null;
 
+  const institutionName = String(account?.institutionName || '').toLowerCase();
+  const accountName = String(account?.name || '').toLowerCase();
+  const isFirstTechLinkedLiability = institutionName.includes('first tech') && isLiability && /line of credit|credit line|credit card|loan/.test(accountName);
+
+  const fixedFirstTechDetails = isFirstTechLinkedLiability
+    ? {
+      interestRate: 2.84,
+      nextPaymentDate: computeMonthlyRollingDate('2026-03-21'),
+      paymentAmount: 550,
+    }
+    : {};
+
   return {
     interestRate,
     termMonths,
     nextPaymentDate: nextPaymentDate ? nextPaymentDate.toISOString().split('T')[0] : null,
     paymentAmount,
+    ...fixedFirstTechDetails,
   };
+}
+
+function parseIsoDate(rawValue) {
+  if (typeof rawValue !== 'string') return null;
+  const trimmed = rawValue.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const parsed = new Date(`${trimmed}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return trimmed;
+}
+
+
+function computeMonthlyRollingDate(anchorIsoDate, referenceDate = new Date()) {
+  if (typeof anchorIsoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(anchorIsoDate)) return null;
+
+  const [year, month, day] = anchorIsoDate.split('-').map(Number);
+  const ref = new Date(referenceDate);
+  if (Number.isNaN(ref.getTime())) return anchorIsoDate;
+
+  let next = new Date(year, month - 1, day);
+  if (Number.isNaN(next.getTime())) return anchorIsoDate;
+
+  while (next < ref) {
+    next = new Date(next.getFullYear(), next.getMonth() + 1, day);
+  }
+
+  return next.toISOString().split('T')[0];
 }
 
 async function fetchInvestmentsHoldings(access_token) {
@@ -335,9 +375,11 @@ module.exports = async (req, res) => {
 
     const now = new Date();
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const requestedStartDate = parseIsoDate(requestBody?.start_date);
+    const requestedEndDate = parseIsoDate(requestBody?.end_date);
 
-    const start_date = ninetyDaysAgo.toISOString().split('T')[0];
-    const end_date = now.toISOString().split('T')[0];
+    const start_date = requestedStartDate || ninetyDaysAgo.toISOString().split('T')[0];
+    const end_date = requestedEndDate || now.toISOString().split('T')[0];
 
     const response = await fetchTransactionsWithRetry(access_token, start_date, end_date);
     const accountsResponse = await plaidClient.accountsGet({ access_token });
@@ -412,6 +454,7 @@ module.exports = async (req, res) => {
           name: acc.name,
           type: acc.type,
           subtype: acc.subtype,
+          institutionName: acc?.official_name || acc?.institution_name || null,
           balance: acc.balances.current,
           holdings: mappedHoldings,
           ...buildLiabilityDetails(acc, liabilityByAccountId),
