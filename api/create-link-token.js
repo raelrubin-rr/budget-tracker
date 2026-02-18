@@ -1,17 +1,6 @@
-const { PlaidApi, PlaidEnvironments, Configuration } = require('plaid');
-const { assertPlaidConfig, parseJsonBody, setCommonHeaders } = require('./_utils');
+const { assertPlaidConfig, createPlaidClient, parseJsonBody, setCommonHeaders } = require('./_utils');
 
-const configuration = new Configuration({
-  basePath: PlaidEnvironments.sandbox,
-  baseOptions: {
-    headers: {
-      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
-      'PLAID-SECRET': process.env.PLAID_SECRET,
-    },
-  },
-});
-
-const plaidClient = new PlaidApi(configuration);
+const plaidClient = createPlaidClient();
 
 module.exports = async (req, res) => {
   setCommonHeaders(res);
@@ -60,10 +49,14 @@ module.exports = async (req, res) => {
       plaidDetails?.error_code ||
       error.message;
 
+    const environmentLabel = process.env.PLAID_ENV || 'sandbox';
+
     return res.status(500).json({
       error: 'Failed to create link token',
       details: plaidDetails || error.message,
       message: detailMessage,
+      plaid_environment: environmentLabel,
+      help: 'Verify PLAID_CLIENT_ID and PLAID_SECRET are from the same Plaid environment configured in PLAID_ENV.',
     });
   }
 };
