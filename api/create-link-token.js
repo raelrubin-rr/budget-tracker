@@ -1,6 +1,16 @@
-const { assertPlaidConfig, createPlaidClient, parseJsonBody, setCommonHeaders } = require('./_utils');
+const { assertPlaidConfig, createPlaidClient, setCommonHeaders } = require('./_utils');
 
 const plaidClient = createPlaidClient();
+
+function resolveTroubleshootingHelp(plaidDetails) {
+  const errorCode = (plaidDetails?.error_code || '').toUpperCase();
+  const errorMessage = (plaidDetails?.error_message || '').toLowerCase();
+  if (errorCode === 'INVALID_FIELD' && errorMessage.includes('oauth redirect uri')) {
+    return 'Set PLAID_REDIRECT_URI to the exact URL listed in Plaid Dashboard > Developers > API > Allowed redirect URIs, then redeploy.';
+  }
+
+  return 'Verify PLAID_CLIENT_ID and PLAID_SECRET are from the same Plaid environment configured in PLAID_ENV.';
+}
 
 module.exports = async (req, res) => {
   setCommonHeaders(res);
@@ -15,9 +25,7 @@ module.exports = async (req, res) => {
 
   try {
     assertPlaidConfig();
-    const { redirect_uri } = parseJsonBody(req);
     const configuredRedirectUri = process.env.PLAID_REDIRECT_URI || null;
-    const requestRedirectUri = typeof redirect_uri === 'string' && redirect_uri.trim() ? redirect_uri.trim() : null;
 
     const request = {
       user: {
@@ -29,9 +37,8 @@ module.exports = async (req, res) => {
       language: 'en',
     };
 
-    const finalRedirectUri = configuredRedirectUri || requestRedirectUri;
-    if (finalRedirectUri) {
-      request.redirect_uri = finalRedirectUri;
+    if (configuredRedirectUri) {
+      request.redirect_uri = configuredRedirectUri;
     }
 
     const response = await plaidClient.linkTokenCreate(request);
@@ -56,7 +63,9 @@ module.exports = async (req, res) => {
       details: plaidDetails || error.message,
       message: detailMessage,
       plaid_environment: environmentLabel,
-      help: 'Verify PLAID_CLIENT_ID and PLAID_SECRET are from the same Plaid environment configured in PLAID_ENV.',
+      help: resolveTroubleshootingHelp(plaidDetails),
+      expected_redirect_uri: process.env.PLAID_REDIRECT_URI || null,
+      requires_oauth_redirect_uri: detailMessage.toLowerCase().includes('oauth redirect uri'),
     });
   }
 };
