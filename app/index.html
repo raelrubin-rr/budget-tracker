@@ -2976,9 +2976,13 @@
             return ['credit', 'loan', 'liability'].includes((acc.type || '').toLowerCase());
         }
 
-        function formatCurrency(value) {
-            const amount = Math.round(Math.abs(Number(value) || 0)).toLocaleString();
-            return Number(value) < 0 ? `($${amount})` : `$${amount}`;
+        function formatCurrency(value, includeCents = false) {
+            const numeric = Number(value) || 0;
+            const absoluteValue = Math.abs(numeric);
+            const amount = includeCents
+                ? absoluteValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : Math.round(absoluteValue).toLocaleString();
+            return numeric < 0 ? `($${amount})` : `$${amount}`;
         }
 
         function formatPercent(value) {
@@ -2991,6 +2995,15 @@
 
         function formatShortDate(value) {
             if (!value) return '--';
+
+            if (typeof value === 'string') {
+                const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (match) {
+                    const [, yyyy, mm, dd] = match;
+                    return `${Number(mm)}/${Number(dd)}/${yyyy.slice(-2)}`;
+                }
+            }
+
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return '--';
             const mm = date.getMonth() + 1;
@@ -3132,7 +3145,7 @@
                 tableBody.innerHTML = `<tr>
                     <td>${account.name}</td>
                     <td>${formatShortDate(details.nextPaymentDate)}</td>
-                    <td>${details.paymentAmount !== null ? formatCurrency(details.paymentAmount) : '--'}</td>
+                    <td>${details.paymentAmount !== null ? formatCurrency(details.paymentAmount, true) : '--'}</td>
                 </tr>`;
             } else {
                 tableEl.classList.remove('liability-details-table');

@@ -104,6 +104,22 @@ function buildLiabilityByAccountId(liabilities = {}) {
     return undefined;
   };
 
+  const readDate = (...values) => {
+    for (const value of values) {
+      if (typeof value !== 'string') continue;
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+      const parsed = new Date(trimmed);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+    }
+
+    return undefined;
+  };
+
   const upsertLiabilityDetails = (accountId, details) => {
     if (!accountId) return;
 
@@ -115,12 +131,19 @@ function buildLiabilityByAccountId(liabilities = {}) {
   };
 
   (liabilities.credit || []).forEach((entry) => {
-    const apr = readNumber(entry?.aprs?.[0]?.apr_percentage);
+    const aprs = Array.isArray(entry?.aprs) ? entry.aprs : [];
+    const purchaseApr = aprs.find((aprEntry) => aprEntry?.apr_type === 'purchase_apr');
+    const apr = readNumber(
+      purchaseApr?.apr_percentage,
+      aprs[0]?.apr_percentage,
+      entry?.interest_rate_percentage,
+      entry?.interest_rate?.percentage,
+    );
     const paymentAmount = readNumber(entry?.minimum_payment_amount, entry?.last_payment_amount);
 
     upsertLiabilityDetails(entry?.account_id, {
       interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
-      nextPaymentDate: entry?.next_payment_due_date,
+      nextPaymentDate: readDate(entry?.next_payment_due_date, entry?.next_payment_date),
       paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
     });
   });
@@ -129,28 +152,46 @@ function buildLiabilityByAccountId(liabilities = {}) {
     const loans = Array.isArray(entry?.loans) && entry.loans.length ? entry.loans : [entry];
 
     loans.forEach((loan) => {
-      const apr = readNumber(loan?.interest_rate_percentage, loan?.interest_rate?.percentage);
+      const apr = readNumber(
+        loan?.interest_rate_percentage,
+        loan?.interest_rate?.percentage,
+        entry?.interest_rate_percentage,
+        entry?.interest_rate?.percentage,
+      );
       const paymentAmount = readNumber(
         loan?.minimum_payment_amount,
         loan?.next_payment_amount,
         loan?.last_payment_amount,
+        entry?.minimum_payment_amount,
+        entry?.next_payment_amount,
+        entry?.last_payment_amount,
       );
 
       upsertLiabilityDetails(loan?.account_id || entry?.account_id, {
         interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
-        nextPaymentDate: loan?.next_payment_due_date || entry?.next_payment_due_date,
+        nextPaymentDate: readDate(
+          loan?.next_payment_due_date,
+          loan?.next_payment_date,
+          entry?.next_payment_due_date,
+          entry?.next_payment_date,
+        ),
         paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
       });
     });
   });
 
   (liabilities.mortgage || []).forEach((entry) => {
-    const apr = readNumber(entry?.interest_rate?.percentage);
-    const paymentAmount = readNumber(entry?.next_monthly_payment, entry?.last_payment_amount);
+    const apr = readNumber(entry?.interest_rate?.percentage, entry?.interest_rate_percentage);
+    const paymentAmount = readNumber(
+      entry?.next_monthly_payment,
+      entry?.next_payment_amount,
+      entry?.minimum_payment_amount,
+      entry?.last_payment_amount,
+    );
 
     upsertLiabilityDetails(entry?.account_id, {
       interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
-      nextPaymentDate: entry?.next_payment_due_date,
+      nextPaymentDate: readDate(entry?.next_payment_due_date, entry?.next_payment_date),
       paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
     });
   });
