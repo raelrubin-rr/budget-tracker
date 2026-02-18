@@ -60,9 +60,6 @@ main {
   padding: 24px 0;
 }
 
-.home-main .container {
-  width: min(860px, 92%);
-}
 
 .home-card {
   min-height: clamp(420px, 64vh, 700px);
@@ -149,7 +146,6 @@ a {
     padding: 8px 0 20px;
   }
 
-  .home-main .container,
   .container {
     width: min(760px, 94%);
   }
