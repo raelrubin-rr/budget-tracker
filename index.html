@@ -1891,9 +1891,10 @@
                 </div>
                 <div class="section-content" id="allTransactionsContent">
                     <div class="transactions-grid rolled-up" id="transactionsGrid">
-                        <div class="transaction-section is-collapsed transaction-panel" id="creditSection" onclick="toggleTransactionSection('creditSection', event)">
-                <div class="section-header">
+                        <div class="transaction-section is-collapsed transaction-panel" id="creditSection">
+                <div class="section-header" onclick="toggleTransactionSection('creditSection', 'creditSectionToggle', event)">
                     <div class="section-title">Credit Card</div>
+                    <span class="toggle-icon collapsed" id="creditSectionToggle">▼</span>
                 </div>
                 <div class="transaction-body">
                     <div class="filter-bar">
@@ -1913,9 +1914,10 @@
                 </div>
                         </div>
 
-                        <div class="transaction-section is-collapsed transaction-panel" id="checkingSection" onclick="toggleTransactionSection('checkingSection', event)">
-                <div class="section-header">
+                        <div class="transaction-section is-collapsed transaction-panel" id="checkingSection">
+                <div class="section-header" onclick="toggleTransactionSection('checkingSection', 'checkingSectionToggle', event)">
                     <div class="section-title">Checking</div>
+                    <span class="toggle-icon collapsed" id="checkingSectionToggle">▼</span>
                 </div>
                 <div class="transaction-body">
                     <div class="filter-bar">
@@ -3450,11 +3452,12 @@
             }
         }
 
-        function toggleTransactionSection(sectionId, event) {
+        function toggleTransactionSection(sectionId, toggleId, event) {
             const section = document.getElementById(sectionId);
+            const toggle = toggleId ? document.getElementById(toggleId) : null;
             if (!section) return;
             if (event) {
-                const blockedTarget = event.target.closest('input, select, button, a, .transaction-clickable, .include-plus-btn, .filter-bar, .transaction-list');
+                const blockedTarget = event.target.closest('input, select, button, a, .transaction-clickable, .include-plus-btn, .filter-bar, .transaction-list, .transaction-body');
                 if (blockedTarget) return;
             }
 
@@ -3464,10 +3467,12 @@
                 const allTransactionsToggle = document.getElementById('allTransactionsToggle');
                 if (allTransactionsToggle) allTransactionsToggle.classList.remove('collapsed');
                 section.classList.remove('is-collapsed');
+                if (toggle) toggle.classList.remove('collapsed');
                 return;
             }
 
-            section.classList.toggle('is-collapsed');
+            const isCollapsed = section.classList.toggle('is-collapsed');
+            if (toggle) toggle.classList.toggle('collapsed', isCollapsed);
         }
 
 
