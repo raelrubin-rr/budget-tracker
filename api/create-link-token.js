@@ -5,6 +5,8 @@ const plaidClient = createPlaidClient();
 module.exports = async (req, res) => {
   setCommonHeaders(res);
 
+  const configuredRedirectUri = process.env.PLAID_REDIRECT_URI || null;
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -15,10 +17,7 @@ module.exports = async (req, res) => {
 
   try {
     assertPlaidConfig();
-    const { redirect_uri } = parseJsonBody(req);
-    const configuredRedirectUri = process.env.PLAID_REDIRECT_URI || null;
-    const requestRedirectUri = typeof redirect_uri === 'string' && redirect_uri.trim() ? redirect_uri.trim() : null;
-
+    parseJsonBody(req);
     const request = {
       user: {
         client_user_id: 'user-' + Date.now(),
@@ -29,9 +28,8 @@ module.exports = async (req, res) => {
       language: 'en',
     };
 
-    const finalRedirectUri = configuredRedirectUri || requestRedirectUri;
-    if (finalRedirectUri) {
-      request.redirect_uri = finalRedirectUri;
+    if (configuredRedirectUri) {
+      request.redirect_uri = configuredRedirectUri;
     }
 
     const response = await plaidClient.linkTokenCreate(request);
@@ -56,7 +54,9 @@ module.exports = async (req, res) => {
       details: plaidDetails || error.message,
       message: detailMessage,
       plaid_environment: environmentLabel,
-      help: 'Verify PLAID_CLIENT_ID and PLAID_SECRET are from the same Plaid environment configured in PLAID_ENV.',
+      help: configuredRedirectUri
+        ? 'Verify PLAID_CLIENT_ID and PLAID_SECRET are from the same Plaid environment configured in PLAID_ENV.'
+        : 'Set PLAID_REDIRECT_URI to an OAuth redirect URL that is also registered in the Plaid developer dashboard.',
     });
   }
 };
