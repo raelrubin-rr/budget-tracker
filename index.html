@@ -590,6 +590,10 @@
             overflow: hidden;
         }
 
+        .transaction-section.is-collapsed {
+            height: auto;
+        }
+
         .transaction-section.is-collapsed .toggle-icon {
             transform: rotate(-90deg);
         }
@@ -3459,17 +3463,7 @@
                 const allTransactionsToggle = document.getElementById('allTransactionsToggle');
                 if (allTransactionsToggle) allTransactionsToggle.classList.remove('collapsed');
                 section.classList.remove('is-collapsed');
-                transactionsGrid.querySelectorAll('.transaction-section').forEach((panel) => {
-                    if (panel.id !== sectionId) panel.classList.add('is-collapsed');
-                });
                 return;
-            }
-
-            const isExpanding = section.classList.contains('is-collapsed');
-            if (isExpanding && transactionsGrid) {
-                transactionsGrid.querySelectorAll('.transaction-section').forEach((panel) => {
-                    if (panel.id !== sectionId) panel.classList.add('is-collapsed');
-                });
             }
 
             section.classList.toggle('is-collapsed');
