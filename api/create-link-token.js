@@ -1,5 +1,5 @@
 const { PlaidApi, PlaidEnvironments, Configuration } = require('plaid');
-const { assertPlaidConfig, setCommonHeaders } = require('./_utils');
+const { assertPlaidConfig, parseJsonBody, setCommonHeaders } = require('./_utils');
 
 const configuration = new Configuration({
   basePath: PlaidEnvironments.sandbox,
@@ -26,6 +26,9 @@ module.exports = async (req, res) => {
 
   try {
     assertPlaidConfig();
+    const { redirect_uri } = parseJsonBody(req);
+    const configuredRedirectUri = process.env.PLAID_REDIRECT_URI || null;
+    const requestRedirectUri = typeof redirect_uri === 'string' && redirect_uri.trim() ? redirect_uri.trim() : null;
 
     const request = {
       user: {
@@ -36,6 +39,11 @@ module.exports = async (req, res) => {
       country_codes: ['US'],
       language: 'en',
     };
+
+    const finalRedirectUri = configuredRedirectUri || requestRedirectUri;
+    if (finalRedirectUri) {
+      request.redirect_uri = finalRedirectUri;
+    }
 
     const response = await plaidClient.linkTokenCreate(request);
 

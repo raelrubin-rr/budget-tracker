@@ -3512,10 +3512,14 @@
                 const response = await fetch('/api/create-link-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ redirect_uri: window.location.origin + '/app/' }),
                 });
 
-                if (!response.ok) throw new Error('Failed to create link token');
                 const data = await response.json();
+                if (!response.ok || !data.link_token) {
+                    const detailsError = typeof data?.details === 'string' ? data.details : data?.details?.error_message;
+                    throw new Error(data?.error || detailsError || 'Failed to create link token');
+                }
                 
                 plaidHandler = Plaid.create({
                     token: data.link_token,
@@ -3544,8 +3548,9 @@
                     },
                     onExit: (err, metadata) => {
                         if (err != null) {
-                            console.error('Plaid Link error:', err);
-                            alert('Connection failed. Please try again.');
+                            console.error('Plaid Link error:', err, metadata);
+                            const plaidMessage = err.display_message || err.error_message || err.error_code;
+                            alert(plaidMessage ? `Connection failed: ${plaidMessage}` : 'Connection failed. Please try again.');
                         }
                     },
                 });
@@ -3553,7 +3558,8 @@
                 plaidHandler.open();
             } catch (error) {
                 console.error('Error connecting to Plaid:', error);
-                alert('Failed to connect. Please check your setup and try again.');
+                const errorMessage = error?.message || 'Failed to connect. Please check your setup and try again.';
+                alert(`Failed to connect: ${errorMessage}`);
             }
         }
 
