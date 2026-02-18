@@ -1371,7 +1371,7 @@
         .holdings-table th:first-child,
         .holdings-table td:first-child {
             text-align: left;
-            width: 56%;
+            width: 28%;
         }
 
         .holdings-table th {
@@ -1439,6 +1439,19 @@
             text-align: right;
         }
 
+
+        .holdings-table.liability-details-table th:first-child,
+        .holdings-table.liability-details-table td:first-child {
+            width: 38%;
+        }
+
+        .holdings-table.liability-details-table th:nth-child(2),
+        .holdings-table.liability-details-table td:nth-child(2),
+        .holdings-table.liability-details-table th:nth-child(3),
+        .holdings-table.liability-details-table td:nth-child(3) {
+            width: 31%;
+        }
+
         .holdings-table th:nth-child(2),
         .holdings-table td:nth-child(2),
         .holdings-table th:nth-child(3),
@@ -1454,7 +1467,12 @@
 
         .holdings-table td:nth-child(3),
         .holdings-table th:nth-child(3) {
-            width: 22%;
+            width: 32%;
+        }
+
+        .holdings-table td:nth-child(4),
+        .holdings-table th:nth-child(4) {
+            width: 18%;
         }
 
         .btn--compact {
@@ -1737,15 +1755,19 @@
             }
             #accountDetailsModal .holdings-table th:first-child,
             #accountDetailsModal .holdings-table td:first-child {
-                width: 34%;
+                width: 30%;
             }
             #accountDetailsModal .holdings-table th:nth-child(2),
             #accountDetailsModal .holdings-table td:nth-child(2) {
-                width: 42%;
+                width: 22%;
             }
             #accountDetailsModal .holdings-table th:nth-child(3),
             #accountDetailsModal .holdings-table td:nth-child(3) {
-                width: 24%;
+                width: 32%;
+            }
+            #accountDetailsModal .holdings-table th:nth-child(4),
+            #accountDetailsModal .holdings-table td:nth-child(4) {
+                width: 16%;
             }
             #accountDetailsModal .holdings-table th:nth-child(2),
             #accountDetailsModal .holdings-table td:nth-child(2) {
@@ -2259,9 +2281,9 @@
             type: 'depository',
             subtype: 'retirement',
             custodian: 'ADP',
-            startBalance: 21068.89,
-            startDate: '2026-02-17',
-            contributionAmount: 365.39,
+            startBalance: 0,
+            startDate: '2026-01-09',
+            contributionAmount: 365,
             contributionFrequencyDays: 14,
             nextContributionDate: '2026-01-09',
             proxySymbol: 'vt.us',
@@ -2595,7 +2617,22 @@
         function ensureDefaultCustomAssets() {
             if (!Array.isArray(state.customAssets)) state.customAssets = [];
             const existing = state.customAssets.find((asset) => asset?.id === DEFAULT_SEIA_401K.id);
-            if (!existing) state.customAssets.push({ ...DEFAULT_SEIA_401K });
+            if (!existing) {
+                state.customAssets.push({ ...DEFAULT_SEIA_401K });
+                return;
+            }
+
+            state.customAssets = state.customAssets.map((asset) => {
+                if (asset?.id !== DEFAULT_SEIA_401K.id) return asset;
+                return {
+                    ...asset,
+                    startBalance: 0,
+                    startDate: '2026-01-09',
+                    contributionAmount: 365,
+                    contributionFrequencyDays: 14,
+                    nextContributionDate: '2026-01-09',
+                };
+            });
         }
 
         async function fetchProxyHistory(symbol, startDate) {
@@ -2762,17 +2799,12 @@
             } = buildCustomAssetCashflowSummary(customAsset, todayIso);
 
             const estimatedBalance = calculateDailyCompoundedBalance(history, customAsset, cashflowMap, todayIso);
-            const netContributed = Number(customAsset.startBalance || 0) + totalContributions - totalWithdrawals;
+            const netContributed = totalContributions - totalWithdrawals;
             const performanceBase = Math.abs(netContributed);
             const performancePct = performanceBase > 0
                 ? Number((((estimatedBalance - netContributed) / performanceBase) * 100).toFixed(1))
                 : null;
-            const yearStartIso = `${new Date().getFullYear()}-01-01`;
-            const ytdStartClose = getCloseOnOrBefore(history, yearStartIso);
-            const currentClose = getCloseOnOrBefore(history, todayIso);
-            const ytdPerformancePct = (Number.isFinite(ytdStartClose) && Number.isFinite(currentClose) && ytdStartClose > 0)
-                ? Number((((currentClose - ytdStartClose) / ytdStartClose) * 100).toFixed(1))
-                : performancePct;
+            const ytdPerformancePct = performancePct;
 
             return {
                 id: customAsset.id,
@@ -2789,9 +2821,10 @@
                     contributionAmount,
                     contributionFrequencyDays: customAsset.contributionFrequencyDays || 14,
                     totalContributionsIncluded: contributionDates.length,
-                    totalContributed: Number((Number(customAsset.startBalance || 0) + totalContributions).toFixed(2)),
+                    totalContributed: Number(totalContributions.toFixed(2)),
                     totalWithdrawn: Number(totalWithdrawals.toFixed(2)),
                     netContributed: Number(netContributed.toFixed(2)),
+                    startingBalance: Number(customAsset.startBalance || 0),
                     futureWithdrawalsScheduled: Number(futureWithdrawalsTotal.toFixed(2)),
                     futureWithdrawalEvents,
                     nextRecurringWithdrawalDate,
@@ -3680,7 +3713,7 @@
                 </tr>`;
             } else {
                 tableEl.classList.remove('liability-details-table');
-                tableHead.innerHTML = '<tr><th>Contributions</th><th>Value</th><th>Weight</th></tr>';
+                tableHead.innerHTML = '<tr><th>Holding</th><th>Contributions</th><th>Value</th><th>Weight</th></tr>';
                 const ytdPct = computePerformancePct(account, kind);
                 const holdings = (account.holdings && account.holdings.length)
                     ? account.holdings
@@ -3704,14 +3737,16 @@
                     const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
                     const contributionValue = Number(account?.estimationMeta?.netContributed);
                     const contributionDisplay = Number.isFinite(contributionValue) ? formatCurrency(contributionValue) : '--';
+                    const holdingLabel = h.symbol || h.name || '--';
                     return `<tr class="holding-main-row">
+                        <td><span class="holding-symbol">${holdingLabel}</span></td>
                         <td class="holding-contribution-cell">${contributionDisplay}</td>
                         <td class="holding-value-cell">
                             <div class="holding-value-stack">
                                 <div class="holding-value-main">${formatCurrency(holdValue)}</div>
                                 <div class="holding-performance-row">
                                     <span class="holding-performance-item ${liveClass}">C: ${formatPercent(holdLive)}</span>
-                                    <span class="holding-performance-item ${ytdClass}">YTD: ${formatPercent(holdYtd)}</span>
+                                    <span class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</span>
                                 </div>
                             </div>
                         </td>
