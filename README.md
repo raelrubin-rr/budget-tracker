@@ -1,6 +1,8 @@
-# Budget Tracker
+# Raelyboy
 
-Personal budget tracker with Plaid bank integration.
+This app is a private, personal use only, budget tracker for reviewing account balances, spending activity, and month-to-date progress in one place.
+
+You can connect supported financial institutions through Plaid, including institutions that use OAuth-style authentication.
 
 ## Deployment
 
