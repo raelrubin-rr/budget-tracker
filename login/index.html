@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log In | Budget Tracker</title>
+  <link rel="stylesheet" href="/assets/public.css" />
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="container">
+        <h1 class="brand">Log In</h1>
+      </div>
+    </header>
+
+    <main>
+      <div class="container">
+        <section class="card">
+          <p>Sign in to access the private dashboard.</p>
+          <form id="login-form">
+            <div class="form-row">
+              <label for="username">Username</label>
+              <input id="username" name="username" autocomplete="username" required />
+            </div>
+            <div class="form-row">
+              <label for="password">Password</label>
+              <input id="password" name="password" type="password" autocomplete="current-password" required />
+            </div>
+            <button class="btn" type="submit">Access App</button>
+            <p class="error" id="error" aria-live="polite"></p>
+          </form>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        Contact: <a href="mailto:raelrubin@gmail.com">raelrubin@gmail.com</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const USERNAME = 'raelrubin';
+      const PASSWORD = '246threeb';
+      const form = document.getElementById('login-form');
+      const error = document.getElementById('error');
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get('next') || '/app';
+
+      if (localStorage.getItem('budgetTrackerAuth') === 'authenticated') {
+        window.location.replace(next);
+      }
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+
+        if (username === USERNAME && password === PASSWORD) {
+          localStorage.setItem('budgetTrackerAuth', 'authenticated');
+          window.location.replace(next);
+          return;
+        }
+
+        error.textContent = 'Invalid username or password.';
+      });
+    })();
+  </script>
+</body>
+</html>
