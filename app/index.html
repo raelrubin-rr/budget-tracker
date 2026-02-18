@@ -3567,7 +3567,7 @@
                 const response = await fetch('/api/create-link-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ redirect_uri: window.location.origin + '/app/' }),
+                    body: JSON.stringify({}),
                 });
 
                 const data = await response.json();
