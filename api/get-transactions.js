@@ -25,18 +25,27 @@ function buildFallbackHoldingForAccount(account) {
   }];
 }
 
-function buildLiabilityDetails(account, aprByAccountId = {}) {
+function buildLiabilityDetails(account, liabilityByAccountId = {}) {
   const metric = `${account?.account_id || ''}${account?.subtype || ''}`.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
   const isLiability = ['credit', 'loan', 'liability'].includes((account?.type || '').toLowerCase());
   if (!isLiability) return {};
 
+  const plaidLiability = liabilityByAccountId[account?.account_id] || {};
   const fallbackInterestRate = Number((8 + ((metric % 120) / 10)).toFixed(2));
-  const plaidInterestRate = Number(aprByAccountId[account?.account_id]);
+  const plaidInterestRate = Number(plaidLiability.interestRate);
   const interestRate = Number.isFinite(plaidInterestRate) ? plaidInterestRate : fallbackInterestRate;
   const termMonths = 12 + ((metric % 84));
+
   const now = new Date();
-  const nextPaymentDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.max(1, (metric % 28) + 1));
-  const paymentAmount = Number((Math.max(25, Math.abs(Number(account?.balances?.current || 0)) * 0.035)).toFixed(2));
+  const fallbackNextPaymentDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.max(1, (metric % 28) + 1));
+  const parsedNextPaymentDate = plaidLiability.nextPaymentDate ? new Date(plaidLiability.nextPaymentDate) : null;
+  const nextPaymentDate = parsedNextPaymentDate && !Number.isNaN(parsedNextPaymentDate.getTime())
+    ? parsedNextPaymentDate
+    : fallbackNextPaymentDate;
+
+  const plaidPaymentAmount = Number(plaidLiability.paymentAmount);
+  const fallbackPaymentAmount = Number((Math.max(25, Math.abs(Number(account?.balances?.current || 0)) * 0.035)).toFixed(2));
+  const paymentAmount = Number.isFinite(plaidPaymentAmount) ? Number(plaidPaymentAmount.toFixed(2)) : fallbackPaymentAmount;
 
   return {
     interestRate,
@@ -89,33 +98,45 @@ async function fetchLiabilitiesData(access_token) {
   }
 }
 
-function buildLiabilityAprByAccountId(liabilities = {}) {
-  const aprByAccountId = {};
+function buildLiabilityByAccountId(liabilities = {}) {
+  const liabilityByAccountId = {};
 
   (liabilities.credit || []).forEach((entry) => {
     const apr = Number(entry?.aprs?.[0]?.apr_percentage);
-    if (entry?.account_id && Number.isFinite(apr)) {
-      aprByAccountId[entry.account_id] = Number(apr.toFixed(2));
-    }
+    if (!entry?.account_id) return;
+
+    liabilityByAccountId[entry.account_id] = {
+      interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
+      nextPaymentDate: entry?.next_payment_due_date,
+      paymentAmount: Number(entry?.minimum_payment_amount),
+    };
   });
 
   (liabilities.student || []).forEach((entry) => {
     (entry?.loans || []).forEach((loan) => {
       const apr = Number(loan?.interest_rate_percentage);
-      if (loan?.account_id && Number.isFinite(apr)) {
-        aprByAccountId[loan.account_id] = Number(apr.toFixed(2));
-      }
+      if (!loan?.account_id) return;
+
+      liabilityByAccountId[loan.account_id] = {
+        interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
+        nextPaymentDate: loan?.next_payment_due_date,
+        paymentAmount: Number(loan?.minimum_payment_amount),
+      };
     });
   });
 
   (liabilities.mortgage || []).forEach((entry) => {
     const apr = Number(entry?.interest_rate?.percentage);
-    if (entry?.account_id && Number.isFinite(apr)) {
-      aprByAccountId[entry.account_id] = Number(apr.toFixed(2));
-    }
+    if (!entry?.account_id) return;
+
+    liabilityByAccountId[entry.account_id] = {
+      interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
+      nextPaymentDate: entry?.next_payment_due_date,
+      paymentAmount: Number(entry?.next_monthly_payment),
+    };
   });
 
-  return aprByAccountId;
+  return liabilityByAccountId;
 }
 
 
@@ -174,7 +195,7 @@ module.exports = async (req, res) => {
     const accountsResponse = await plaidClient.accountsGet({ access_token });
     const investmentsData = await fetchInvestmentsHoldings(access_token);
     const liabilitiesData = await fetchLiabilitiesData(access_token);
-    const aprByAccountId = buildLiabilityAprByAccountId(liabilitiesData);
+    const liabilityByAccountId = buildLiabilityByAccountId(liabilitiesData);
     const accounts = accountsResponse.data.accounts;
     const securitiesById = (investmentsData.securities || []).reduce((acc, security) => {
       acc[security.security_id] = security;
@@ -245,7 +266,7 @@ module.exports = async (req, res) => {
           subtype: acc.subtype,
           balance: acc.balances.current,
           holdings: mappedHoldings,
-          ...buildLiabilityDetails(acc, aprByAccountId),
+          ...buildLiabilityDetails(acc, liabilityByAccountId),
         };
       }),
     });

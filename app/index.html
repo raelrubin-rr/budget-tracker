@@ -328,6 +328,39 @@
             text-transform: uppercase;
         }
 
+        .accounts-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .visibility-list {
+            display: grid;
+            gap: 10px;
+            max-height: 180px;
+            overflow-y: auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px;
+        }
+
+        .visibility-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .visibility-item input {
+            accent-color: var(--blue);
+        }
+
         .accounts-columns {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -1157,6 +1190,20 @@
             white-space: nowrap;
         }
 
+        .account-visibility-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin: 4px 0 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .account-visibility-toggle input {
+            accent-color: var(--blue);
+        }
+
         .custodian-label-wrap {
             display: flex;
             flex-direction: column;
@@ -1949,7 +1996,10 @@
         <div class="accounts-widget">
             <div class="accounts-header">
                 <div class="accounts-title">Assets & Liabilities</div>
-                <a href="#" class="accounts-link" onclick="connectPlaid(); return false;">Link external accounts</a>
+                <div class="accounts-actions">
+                    <a href="#" class="accounts-link" onclick="openAccountVisibilityModal(); return false;">Manage visibility</a>
+                    <a href="#" class="accounts-link" onclick="connectPlaid(); return false;">Link external accounts</a>
+                </div>
             </div>
 
             <div class="accounts-columns">
@@ -2098,6 +2148,23 @@
         </div>
     </div>
 
+    <div class="modal" id="accountVisibilityModal">
+        <div class="modal-content wide">
+            <div class="modal-header">Account Visibility</div>
+            <div class="form-group">
+                <label class="form-label">Assets</label>
+                <div id="accountVisibilityAssetsList" class="visibility-list"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Liabilities</label>
+                <div id="accountVisibilityLiabilitiesList" class="visibility-list"></div>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn--compact" onclick="closeModal('accountVisibilityModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="renameAccountModal">
         <div class="modal-content">
             <div class="modal-header">Rename Account</div>
@@ -2122,6 +2189,10 @@
                 </div>
                 <button class="btn btn-primary" onclick="saveAccountDetailsName()">Save Name</button>
             </div>
+            <label class="account-visibility-toggle">
+                <input type="checkbox" id="accountVisibilityToggle" onchange="updateAccountVisibilityFromModal()">
+                <span id="accountVisibilityLabel">Show in list</span>
+            </label>
             <table class="holdings-table" id="accountDetailsTable">
                 <thead id="accountDetailsTableHead"></thead>
                 <tbody id="accountHoldingsBody"></tbody>
@@ -2134,15 +2205,17 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
-        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], lastAccountsUpdatedAt: null };
+        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], accountVisibility: {}, lastAccountsUpdatedAt: null };
         let editingFixedExpenseIndex = null;
         let currentReimbursableIndex = null;
         let currentRenameAccountId = null;
         let currentAccountDetailsId = null;
+        let currentAccountDetailsKind = null;
         let trendChart = null;
         let categoryChart = null;
 
         const BILLING_HISTORY_KEY = 'budget_billing_history_v1';
+        const ACCOUNT_VISIBILITY_KEY = 'budget_account_visibility_v1';
         const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
         function loadBillingHistory() {
@@ -2159,6 +2232,43 @@
 
         function persistBillingHistory() {
             localStorage.setItem(BILLING_HISTORY_KEY, JSON.stringify(state.billingHistory || []));
+        }
+
+        function loadAccountVisibility() {
+            try {
+                const raw = localStorage.getItem(ACCOUNT_VISIBILITY_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (error) {
+                console.warn('Unable to parse account visibility settings, resetting.', error);
+                return {};
+            }
+        }
+
+        function persistAccountVisibility() {
+            localStorage.setItem(ACCOUNT_VISIBILITY_KEY, JSON.stringify(state.accountVisibility || {}));
+        }
+
+        function getAccountVisibility(accountId) {
+            const prefs = (state.accountVisibility && state.accountVisibility[accountId]) || {};
+            return {
+                showInAssets: prefs.showInAssets !== false,
+                showInLiabilities: prefs.showInLiabilities !== false,
+            };
+        }
+
+        function isAccountVisible(account, kind) {
+            const prefs = getAccountVisibility(account.id);
+            return kind === 'liability' ? prefs.showInLiabilities : prefs.showInAssets;
+        }
+
+        function setAccountVisibility(accountId, patch) {
+            if (!accountId) return;
+            if (!state.accountVisibility || typeof state.accountVisibility !== 'object') state.accountVisibility = {};
+            const current = getAccountVisibility(accountId);
+            state.accountVisibility[accountId] = { ...current, ...patch };
+            persistAccountVisibility();
         }
 
         const CATEGORIES = {
@@ -2437,8 +2547,9 @@
                     budgetStartDay: state.budgetStartDay || demoState.budgetStartDay,
                     fixedExpenses: state.fixedExpenses.length ? state.fixedExpenses : demoState.fixedExpenses,
                     billingHistory: state.billingHistory || demoState.billingHistory || [],
+                    accountVisibility: state.accountVisibility || {},
                 }
-                : demoState;
+                : { ...demoState, accountVisibility: state.accountVisibility || {} };
             state.lastAccountsUpdatedAt = new Date().toISOString();
 
             updateUI();
@@ -2897,11 +3008,13 @@
         }
 
         function getLiabilityDetails(account) {
+            const parsedInterestRate = Number(account.interestRate);
+            const parsedPaymentAmount = Number(account.paymentAmount);
             return {
-                interestRate: Number(account.interestRate || 0),
+                interestRate: Number.isFinite(parsedInterestRate) ? parsedInterestRate : null,
                 termMonths: Number(account.termMonths || 0),
-                nextPaymentDate: account.nextPaymentDate || '--',
-                paymentAmount: Number(account.paymentAmount || 0),
+                nextPaymentDate: account.nextPaymentDate || null,
+                paymentAmount: Number.isFinite(parsedPaymentAmount) ? parsedPaymentAmount : null,
             };
         }
 
@@ -2913,9 +3026,11 @@
 
             const assetAccounts = accounts
                 .filter(acc => !isLiabilityAccount(acc))
+                .filter(acc => isAccountVisible(acc, 'asset'))
                 .sort((a, b) => Math.abs(Number(b.balance || 0)) - Math.abs(Number(a.balance || 0)));
             const liabilityAccounts = accounts
                 .filter(acc => isLiabilityAccount(acc))
+                .filter(acc => isAccountVisible(acc, 'liability'))
                 .sort((a, b) => Math.abs(Number(b.balance || 0)) - Math.abs(Number(a.balance || 0)));
 
             let totalAssets = 0;
@@ -2964,7 +3079,7 @@
                                 <td class="account-cell">
                                     <span class="account-name">${acc.name}</span>
                                 </td>
-                                <td>${liabilityDetails.interestRate ? `${liabilityDetails.interestRate.toFixed(2)}%` : '--'}</td>
+                                <td>${liabilityDetails.interestRate !== null ? `${liabilityDetails.interestRate.toFixed(2)}%` : '--'}</td>
                                 <td>${formatCurrency(-Math.abs(value))}</td>
                             </tr>`;
                         }
@@ -2992,6 +3107,7 @@
             const account = (state.accounts || []).find(acc => acc.id === accountId);
             if (!account) return;
             currentAccountDetailsId = accountId;
+            currentAccountDetailsKind = kind;
 
             document.getElementById('accountDetailsHeader').textContent = `${kind === 'liability' ? 'Liability' : 'Asset'} Details`;
             document.getElementById('accountDetailsNameInput').value = account.name || '';
@@ -2999,6 +3115,11 @@
             const tableEl = document.getElementById('accountDetailsTable');
             const tableHead = document.getElementById('accountDetailsTableHead');
             const tableBody = document.getElementById('accountHoldingsBody');
+            const visibilityToggle = document.getElementById('accountVisibilityToggle');
+            const visibilityLabel = document.getElementById('accountVisibilityLabel');
+            const prefs = getAccountVisibility(account.id);
+            visibilityToggle.checked = kind === 'liability' ? prefs.showInLiabilities : prefs.showInAssets;
+            visibilityLabel.textContent = kind === 'liability' ? 'Show in Liabilities list' : 'Show in Assets list';
 
             if (kind === 'liability') {
                 tableEl.classList.add('liability-details-table');
@@ -3007,7 +3128,7 @@
                 tableBody.innerHTML = `<tr>
                     <td>${account.name}</td>
                     <td>${formatShortDate(details.nextPaymentDate)}</td>
-                    <td>${details.paymentAmount ? formatCurrency(details.paymentAmount) : '--'}</td>
+                    <td>${details.paymentAmount !== null ? formatCurrency(details.paymentAmount) : '--'}</td>
                 </tr>`;
             } else {
                 tableEl.classList.remove('liability-details-table');
@@ -3026,9 +3147,11 @@
 
                 tableBody.innerHTML = holdings.map(h => {
                     const holdWeight = Number(h.weight || 0);
-                    const holdLive = h.livePct === null || h.livePct === undefined || h.livePct === '' ? null : Number(h.livePct);
-                    const holdYtd = h.ytdPct === null || h.ytdPct === undefined || h.ytdPct === '' ? ytdPct : Number(h.ytdPct);
                     const holdValue = Number(h.value || 0);
+                    const holdLiveRaw = h.livePct === null || h.livePct === undefined || h.livePct === '' ? null : Number(h.livePct);
+                    const holdYtdRaw = h.ytdPct === null || h.ytdPct === undefined || h.ytdPct === '' ? ytdPct : Number(h.ytdPct);
+                    const holdLive = holdLiveRaw === null && holdValue === 0 ? 0 : holdLiveRaw;
+                    const holdYtd = holdYtdRaw === null && holdValue === 0 ? 0 : holdYtdRaw;
                     const liveClass = holdLive !== null && holdLive < 0 ? 'negative' : 'positive';
                     const ytdClass = holdYtd < 0 ? 'negative' : 'positive';
                     return `<tr class="holding-main-row">
@@ -3050,6 +3173,14 @@
             document.getElementById('accountDetailsModal').classList.add('active');
         }
 
+        function updateAccountVisibilityFromModal() {
+            if (!currentAccountDetailsId || !currentAccountDetailsKind) return;
+            const checked = !!document.getElementById('accountVisibilityToggle')?.checked;
+            if (currentAccountDetailsKind === 'liability') setAccountVisibility(currentAccountDetailsId, { showInLiabilities: checked });
+            else setAccountVisibility(currentAccountDetailsId, { showInAssets: checked });
+            updateUI();
+        }
+
         function saveAccountDetailsName() {
             if (!currentAccountDetailsId) return;
             const account = (state.accounts || []).find(acc => acc.id === currentAccountDetailsId);
@@ -3059,6 +3190,29 @@
             account.name = nextName;
             updateUI();
             closeModal('accountDetailsModal');
+        }
+
+        function openAccountVisibilityModal() {
+            const accounts = state.accounts || [];
+            const assetsList = document.getElementById('accountVisibilityAssetsList');
+            const liabilitiesList = document.getElementById('accountVisibilityLiabilitiesList');
+            if (!assetsList || !liabilitiesList) return;
+
+            const assets = accounts.filter(acc => !isLiabilityAccount(acc));
+            const liabilities = accounts.filter(acc => isLiabilityAccount(acc));
+
+            const buildVisibilityRows = (items, kind) => {
+                if (!items.length) return '<div class="empty-state">No accounts available.</div>';
+                return items.map(acc => {
+                    const prefs = getAccountVisibility(acc.id);
+                    const checked = kind === 'liability' ? prefs.showInLiabilities : prefs.showInAssets;
+                    return `<label class="visibility-item"><span>${acc.name}</span><input type="checkbox" ${checked ? 'checked' : ''} onchange="setAccountVisibility('${acc.id}', { ${kind === 'liability' ? 'showInLiabilities' : 'showInAssets'}: this.checked }); updateUI();"></label>`;
+                }).join('');
+            };
+
+            assetsList.innerHTML = buildVisibilityRows(assets, 'asset');
+            liabilitiesList.innerHTML = buildVisibilityRows(liabilities, 'liability');
+            document.getElementById('accountVisibilityModal').classList.add('active');
         }
 
         function openRenameAccountModal(accountId) {
@@ -3354,7 +3508,10 @@
             document.getElementById(modalId).classList.remove('active');
             if (modalId === 'fixedModal') editingFixedExpenseIndex = null;
             if (modalId === 'renameAccountModal') currentRenameAccountId = null;
-            if (modalId === 'accountDetailsModal') currentAccountDetailsId = null;
+            if (modalId === 'accountDetailsModal') {
+                currentAccountDetailsId = null;
+                currentAccountDetailsKind = null;
+            }
         }
         function saveIncome() { const value = parseCurrencyInput(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); closeModal('incomeModal'); } }
         function saveSavings() { const value = parseCurrencyInput(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); closeModal('savingsModal'); } }
@@ -3708,6 +3865,7 @@
         function checkConnection() {
             plaidItems = loadPlaidItems();
             state.billingHistory = loadBillingHistory();
+            state.accountVisibility = loadAccountVisibility();
 
             if (plaidItems.length) {
                 setConnectionState(getConnectionLabel());
