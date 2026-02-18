@@ -3491,20 +3491,75 @@
 
 
         // Plaid Integration
+        const PLAID_ITEMS_STORAGE_KEY = 'plaid_items';
         let plaidHandler = null;
-        let accessToken = localStorage.getItem('plaid_access_token');
 
-        function setConnectionState(institutionName) {
+        function loadPlaidItems() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(PLAID_ITEMS_STORAGE_KEY) || '[]');
+                if (Array.isArray(parsed) && parsed.length) {
+                    return parsed.filter(item => item && item.accessToken).map(item => ({
+                        accessToken: item.accessToken,
+                        itemId: item.itemId || '',
+                        institutionName: item.institutionName || 'Linked institution',
+                        linkedAt: item.linkedAt || new Date().toISOString(),
+                    }));
+                }
+            } catch (error) {
+                console.error('Error reading Plaid items from storage:', error);
+            }
+
+            const legacyAccessToken = localStorage.getItem('plaid_access_token');
+            if (!legacyAccessToken) return [];
+
+            return [{
+                accessToken: legacyAccessToken,
+                itemId: localStorage.getItem('plaid_item_id') || '',
+                institutionName: localStorage.getItem('plaid_institution') || 'Linked institution',
+                linkedAt: new Date().toISOString(),
+            }];
+        }
+
+        function persistPlaidItems(items) {
+            localStorage.setItem(PLAID_ITEMS_STORAGE_KEY, JSON.stringify(items));
+
+            if (items.length) {
+                const latest = items[items.length - 1];
+                localStorage.setItem('plaid_access_token', latest.accessToken);
+                localStorage.setItem('plaid_item_id', latest.itemId || '');
+                localStorage.setItem('plaid_institution', latest.institutionName || 'Linked institution');
+            }
+        }
+
+        function upsertPlaidItem(nextItem) {
+            const existingIndex = plaidItems.findIndex(item => item.itemId && item.itemId === nextItem.itemId);
+            if (existingIndex >= 0) {
+                plaidItems[existingIndex] = { ...plaidItems[existingIndex], ...nextItem, linkedAt: new Date().toISOString() };
+            } else {
+                plaidItems.push({ ...nextItem, linkedAt: new Date().toISOString() });
+            }
+            persistPlaidItems(plaidItems);
+        }
+
+        function getConnectionLabel() {
+            if (!plaidItems.length) return null;
+            if (plaidItems.length === 1) return plaidItems[0].institutionName;
+            return `${plaidItems.length} institutions`;
+        }
+
+        let plaidItems = loadPlaidItems();
+
+        function setConnectionState(institutionLabel) {
             const statusTextEl = document.getElementById('statusText');
             const connectionStatusEl = document.getElementById('connectionStatus');
             const connectBtnEl = document.getElementById('connectBtn');
 
-            if (statusTextEl) statusTextEl.textContent = institutionName ? 'Connected - ' + institutionName : 'Not connected';
+            if (statusTextEl) statusTextEl.textContent = institutionLabel ? 'Connected - ' + institutionLabel : 'Not connected';
             if (connectionStatusEl) {
-                if (institutionName) connectionStatusEl.classList.add('connected');
+                if (institutionLabel) connectionStatusEl.classList.add('connected');
                 else connectionStatusEl.classList.remove('connected');
             }
-            if (connectBtnEl) connectBtnEl.textContent = institutionName ? 'Reconnect Account' : 'Connect Account';
+            if (connectBtnEl) connectBtnEl.textContent = institutionLabel ? 'Connect Another Account' : 'Connect Account';
         }
 
         async function connectPlaid() {
@@ -3522,7 +3577,7 @@
                         (typeof data?.details === 'string' ? data.details : (data?.details?.error_message || data?.details?.display_message || data?.details?.error_code));
                     throw new Error(detailsError || data?.error || 'Failed to create link token');
                 }
-                
+
                 plaidHandler = Plaid.create({
                     token: data.link_token,
                     onSuccess: async (public_token, metadata) => {
@@ -3537,14 +3592,16 @@
                             throw new Error(exchangeData.error || 'Failed to exchange public token');
                         }
 
-                        accessToken = exchangeData.access_token;
-                        localStorage.setItem('plaid_access_token', accessToken);
-                        localStorage.setItem('plaid_item_id', exchangeData.item_id);
                         const institutionName = metadata?.institution?.name || 'Bank account';
-                        localStorage.setItem('plaid_institution', institutionName);
-                        
-                        setConnectionState(institutionName);
-                        
+
+                        upsertPlaidItem({
+                            accessToken: exchangeData.access_token,
+                            itemId: exchangeData.item_id,
+                            institutionName,
+                        });
+
+                        setConnectionState(getConnectionLabel());
+
                         await fetchTransactions();
                         toggleSidebar();
                     },
@@ -3566,30 +3623,78 @@
         }
 
         async function fetchTransactions() {
-            if (!accessToken) {
-                console.log('No access token, loading demo data');
+            if (!plaidItems.length) {
+                console.log('No Plaid items, loading demo data');
                 loadDemoData(true);
                 return;
             }
 
             try {
-                const response = await fetch('/api/get-transactions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ access_token: accessToken }),
+                const syncResults = await Promise.allSettled(plaidItems.map(async (item) => {
+                    const response = await fetch('/api/get-transactions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ access_token: item.accessToken }),
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok) {
+                        const detailsError = typeof data?.details === 'string' ? data.details : data?.details?.error_message;
+                        const errMsg = data?.error || detailsError || 'Unable to load transactions right now';
+                        throw new Error(errMsg);
+                    }
+
+                    return { item, data };
+                }));
+
+                const successfulResults = syncResults
+                    .filter(result => result.status === 'fulfilled')
+                    .map(result => result.value);
+
+                if (!successfulResults.length) {
+                    const firstError = syncResults.find(result => result.status === 'rejected');
+                    throw new Error(firstError?.reason?.message || 'No institution data available yet');
+                }
+
+                const nowIso = new Date().toISOString();
+                const mergedAccounts = [];
+                const mergedTransactions = [];
+
+                successfulResults.forEach(({ item, data }) => {
+                    const accountScope = item.itemId || item.institutionName || 'item';
+                    const accountIdMap = {};
+
+                    (data.accounts || []).forEach((acc) => {
+                        const scopedAccountId = `${accountScope}::${acc.id}`;
+                        accountIdMap[acc.id] = scopedAccountId;
+                        mergedAccounts.push({
+                            ...acc,
+                            id: scopedAccountId,
+                            sourceAccountId: acc.id,
+                            custodian: item.institutionName || 'Linked institution',
+                            lastUpdatedAt: nowIso,
+                        });
+                    });
+
+                    (data.transactions || []).forEach((tx) => {
+                        const scopedAccountId = accountIdMap[tx.accountId] || `${accountScope}::${tx.accountId}`;
+                        mergedTransactions.push(normalizeTransactionCategory({
+                            ...tx,
+                            id: `${accountScope}::${tx.id}`,
+                            accountId: scopedAccountId,
+                            sourceAccountId: tx.accountId,
+                        }));
+                    });
                 });
 
-                const data = await response.json();
-                if (!response.ok) {
-                    const detailsError = typeof data?.details === 'string' ? data.details : data?.details?.error_message;
-                    const errMsg = data?.error || detailsError || 'Unable to load transactions right now';
-                    throw new Error(errMsg);
+                state.transactions = mergedTransactions;
+                state.accounts = mergedAccounts;
+                state.lastAccountsUpdatedAt = nowIso;
+
+                const failedCount = syncResults.length - successfulResults.length;
+                if (failedCount > 0) {
+                    alert(`Synced ${successfulResults.length} institution(s). ${failedCount} institution(s) are still syncing or unavailable.`);
                 }
-                
-                state.transactions = (data.transactions || []).map(normalizeTransactionCategory);
-                const institution = localStorage.getItem('plaid_institution') || 'Linked institution';
-                state.accounts = (data.accounts || []).map(acc => ({ ...acc, custodian: institution, lastUpdatedAt: new Date().toISOString() }));
-                state.lastAccountsUpdatedAt = new Date().toISOString();
 
                 updateUI();
             } catch (error) {
@@ -3601,11 +3706,11 @@
         }
 
         function checkConnection() {
-            const institution = localStorage.getItem('plaid_institution');
+            plaidItems = loadPlaidItems();
             state.billingHistory = loadBillingHistory();
 
-            if (accessToken && institution) {
-                setConnectionState(institution);
+            if (plaidItems.length) {
+                setConnectionState(getConnectionLabel());
                 fetchTransactions();
             } else {
                 setConnectionState(null);
