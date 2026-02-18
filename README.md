@@ -9,6 +9,7 @@ You can connect supported financial institutions through Plaid, including instit
 This is deployed on Vercel with environment variables:
 - PLAID_CLIENT_ID
 - PLAID_SECRET
+- PLAID_ENV (optional, one of sandbox/development/production; defaults to sandbox)
 - OPENAI_API_KEY (optional, enables AI transaction categorization)
 - OPENAI_MODEL (optional, defaults to gpt-4o-mini)
 

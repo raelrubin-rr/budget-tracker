@@ -1,17 +1,6 @@
-const { PlaidApi, PlaidEnvironments, Configuration } = require('plaid');
-const { assertPlaidConfig, parseJsonBody, setCommonHeaders } = require('./_utils');
+const { assertPlaidConfig, createPlaidClient, parseJsonBody, setCommonHeaders } = require('./_utils');
 
-const configuration = new Configuration({
-  basePath: PlaidEnvironments.sandbox,
-  baseOptions: {
-    headers: {
-      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
-      'PLAID-SECRET': process.env.PLAID_SECRET,
-    },
-  },
-});
-
-const plaidClient = new PlaidApi(configuration);
+const plaidClient = createPlaidClient();
 
 module.exports = async (req, res) => {
   setCommonHeaders(res);

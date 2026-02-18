@@ -1,3 +1,5 @@
+const { PlaidApi, PlaidEnvironments, Configuration } = require('plaid');
+
 function setCommonHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -34,8 +36,36 @@ function assertPlaidConfig() {
   }
 }
 
+function resolvePlaidEnvironment() {
+  const plaidEnv = (process.env.PLAID_ENV || 'sandbox').toLowerCase();
+
+  const envByName = {
+    sandbox: PlaidEnvironments.sandbox,
+    development: PlaidEnvironments.development,
+    production: PlaidEnvironments.production,
+  };
+
+  return envByName[plaidEnv] || PlaidEnvironments.sandbox;
+}
+
+function createPlaidClient() {
+  const configuration = new Configuration({
+    basePath: resolvePlaidEnvironment(),
+    baseOptions: {
+      headers: {
+        'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
+        'PLAID-SECRET': process.env.PLAID_SECRET,
+      },
+    },
+  });
+
+  return new PlaidApi(configuration);
+}
+
 module.exports = {
   assertPlaidConfig,
+  createPlaidClient,
   parseJsonBody,
+  resolvePlaidEnvironment,
   setCommonHeaders,
 };
