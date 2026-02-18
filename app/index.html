@@ -2625,10 +2625,10 @@
             return Number(last.close);
         }
 
-        function buildBiweeklyContributionDates(nextContributionDate, frequencyDays, endDate) {
+        function buildRecurringEventDates(startDate, frequencyDays, endDate) {
             const dates = [];
-            const start = parseIsoDateToUtc(nextContributionDate);
-            if (!start || !Number.isFinite(Number(frequencyDays)) || frequencyDays <= 0) return dates;
+            const start = parseIsoDateToUtc(startDate);
+            if (!start || !Number.isFinite(Number(frequencyDays)) || Number(frequencyDays) <= 0) return dates;
             const end = parseIsoDateToUtc(endDate);
             if (!end) return dates;
 
@@ -2641,33 +2641,140 @@
             return dates;
         }
 
-        async function buildEstimatedCustomAccount(customAsset) {
-            const history = await fetchProxyHistory(customAsset.proxySymbol || 'vt.us', customAsset.startDate);
-            const todayIso = formatDateToIso(new Date());
-            const startClose = getCloseOnOrBefore(history, customAsset.startDate);
-            const latestClose = getCloseOnOrBefore(history, todayIso);
-            const growthFactorFrom = (isoDate) => {
-                const referenceClose = getCloseOnOrBefore(history, isoDate);
-                if (!referenceClose || !latestClose) return 1;
-                return latestClose / referenceClose;
-            };
 
-            const contributionDates = buildBiweeklyContributionDates(
+        function getNextRecurringEventDate(startDate, frequencyDays, afterDate) {
+            const start = parseIsoDateToUtc(startDate);
+            const after = parseIsoDateToUtc(afterDate);
+            const freq = Number(frequencyDays);
+            if (!start || !after || !Number.isFinite(freq) || freq <= 0) return null;
+
+            const cursor = new Date(start);
+            while (cursor <= after) {
+                cursor.setUTCDate(cursor.getUTCDate() + freq);
+            }
+            return formatDateToIso(cursor);
+        }
+
+        function buildCustomAssetCashflowSummary(customAsset, todayIso) {
+            const contributionAmount = Number(customAsset.contributionAmount || 0);
+            const contributionDates = buildRecurringEventDates(
                 customAsset.nextContributionDate,
                 customAsset.contributionFrequencyDays || 14,
                 todayIso,
             );
 
-            const startingBalance = Number(customAsset.startBalance || 0);
-            const contributionAmount = Number(customAsset.contributionAmount || 0);
-            const projectedFromStart = startingBalance * (startClose && latestClose ? (latestClose / startClose) : 1);
-            const projectedContributions = contributionDates.reduce((sum, dateIso) => {
-                return sum + (contributionAmount * growthFactorFrom(dateIso));
-            }, 0);
-            const estimatedBalance = projectedFromStart + projectedContributions;
-            const totalContributed = startingBalance + (contributionDates.length * contributionAmount);
-            const performancePct = totalContributed > 0
-                ? Number((((estimatedBalance - totalContributed) / totalContributed) * 100).toFixed(1))
+            const recurringWithdrawalAmount = Math.abs(Number(customAsset.withdrawalAmount || 0));
+            const withdrawalDates = buildRecurringEventDates(
+                customAsset.nextWithdrawalDate,
+                customAsset.withdrawalFrequencyDays || 0,
+                todayIso,
+            );
+
+            const explicitWithdrawals = Array.isArray(customAsset.withdrawals)
+                ? customAsset.withdrawals
+                    .map((entry) => ({
+                        date: typeof entry?.date === 'string' ? entry.date : null,
+                        amount: Math.abs(Number(entry?.amount || 0)),
+                    }))
+                    .filter((entry) => entry.date && Number.isFinite(entry.amount) && entry.amount > 0)
+                : [];
+
+            const futureExplicitWithdrawals = Array.isArray(customAsset.withdrawals)
+                ? customAsset.withdrawals
+                    .map((entry) => ({
+                        date: typeof entry?.date === 'string' ? entry.date : null,
+                        amount: Math.abs(Number(entry?.amount || 0)),
+                    }))
+                    .filter((entry) => entry.date && entry.date > todayIso && Number.isFinite(entry.amount) && entry.amount > 0)
+                : [];
+
+            const cashflowMap = {};
+            contributionDates.forEach((dateIso) => {
+                cashflowMap[dateIso] = (cashflowMap[dateIso] || 0) + contributionAmount;
+            });
+            withdrawalDates.forEach((dateIso) => {
+                cashflowMap[dateIso] = (cashflowMap[dateIso] || 0) - recurringWithdrawalAmount;
+            });
+            explicitWithdrawals.forEach((entry) => {
+                cashflowMap[entry.date] = (cashflowMap[entry.date] || 0) - entry.amount;
+            });
+
+            const totalContributions = contributionDates.length * contributionAmount;
+            const totalWithdrawals = (withdrawalDates.length * recurringWithdrawalAmount)
+                + explicitWithdrawals.reduce((sum, entry) => sum + entry.amount, 0);
+            const nextRecurringWithdrawalDate = getNextRecurringEventDate(
+                customAsset.nextWithdrawalDate,
+                customAsset.withdrawalFrequencyDays || 0,
+                todayIso,
+            );
+            const futureWithdrawalsTotal = futureExplicitWithdrawals.reduce((sum, entry) => sum + entry.amount, 0)
+                + (nextRecurringWithdrawalDate ? recurringWithdrawalAmount : 0);
+
+            return {
+                contributionAmount,
+                contributionDates,
+                cashflowMap,
+                totalContributions,
+                totalWithdrawals,
+                totalWithdrawalEvents: withdrawalDates.length + explicitWithdrawals.length,
+                nextRecurringWithdrawalDate,
+                futureWithdrawalsTotal,
+                futureWithdrawalEvents: futureExplicitWithdrawals.length + (nextRecurringWithdrawalDate ? 1 : 0),
+            };
+        }
+
+        function calculateDailyCompoundedBalance(history, customAsset, cashflowMap, todayIso) {
+            const sortedHistory = Array.isArray(history)
+                ? history
+                    .filter((entry) => entry?.date && entry.date <= todayIso && Number.isFinite(Number(entry.close)))
+                    .map((entry) => ({ date: entry.date, close: Number(entry.close) }))
+                    .sort((a, b) => a.date.localeCompare(b.date))
+                : [];
+
+            const startBalance = Number(customAsset.startBalance || 0);
+            const startDate = customAsset.startDate;
+            let estimatedBalance = startBalance + (cashflowMap[startDate] || 0);
+
+            if (!sortedHistory.length) return estimatedBalance;
+
+            let previousClose = getCloseOnOrBefore(sortedHistory, startDate);
+            for (const bar of sortedHistory) {
+                if (bar.date <= startDate) {
+                    previousClose = bar.close;
+                    continue;
+                }
+
+                if (Number.isFinite(previousClose) && previousClose > 0) {
+                    estimatedBalance *= (bar.close / previousClose);
+                }
+                estimatedBalance += (cashflowMap[bar.date] || 0);
+                previousClose = bar.close;
+            }
+
+            return estimatedBalance;
+        }
+
+        async function buildEstimatedCustomAccount(customAsset) {
+            const history = await fetchProxyHistory(customAsset.proxySymbol || 'vt.us', customAsset.startDate);
+            const todayIso = formatDateToIso(new Date());
+
+            const {
+                contributionAmount,
+                contributionDates,
+                cashflowMap,
+                totalContributions,
+                totalWithdrawals,
+                totalWithdrawalEvents,
+                nextRecurringWithdrawalDate,
+                futureWithdrawalsTotal,
+                futureWithdrawalEvents,
+            } = buildCustomAssetCashflowSummary(customAsset, todayIso);
+
+            const estimatedBalance = calculateDailyCompoundedBalance(history, customAsset, cashflowMap, todayIso);
+            const netContributed = Number(customAsset.startBalance || 0) + totalContributions - totalWithdrawals;
+            const performanceBase = Math.abs(netContributed);
+            const performancePct = performanceBase > 0
+                ? Number((((estimatedBalance - netContributed) / performanceBase) * 100).toFixed(1))
                 : null;
 
             return {
@@ -2685,7 +2792,13 @@
                     contributionAmount,
                     contributionFrequencyDays: customAsset.contributionFrequencyDays || 14,
                     totalContributionsIncluded: contributionDates.length,
-                    totalContributed: Number(totalContributed.toFixed(2)),
+                    totalContributed: Number((Number(customAsset.startBalance || 0) + totalContributions).toFixed(2)),
+                    totalWithdrawn: Number(totalWithdrawals.toFixed(2)),
+                    netContributed: Number(netContributed.toFixed(2)),
+                    futureWithdrawalsScheduled: Number(futureWithdrawalsTotal.toFixed(2)),
+                    futureWithdrawalEvents,
+                    nextRecurringWithdrawalDate,
+                    totalWithdrawalEvents,
                     performancePct,
                 },
                 holdings: [{
@@ -3230,6 +3343,7 @@
                 accountOverrides: loadAccountOverrides(),
                 transactionOverrides: loadTransactionOverrides(),
                 customAssets: Array.isArray(state.customAssets) ? state.customAssets : [],
+                plaidItems: typeof plaidItems === 'undefined' ? [] : normalizePlaidItems(plaidItems),
             };
         }
 
@@ -3257,6 +3371,12 @@
             }, 700);
         }
 
+        function setTextIfPresent(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = value ?? '';
+        }
+
         async function loadRemoteState() {
             isHydratingRemoteState = true;
             try {
@@ -3273,6 +3393,11 @@
                 const data = await response.json();
                 const remoteState = data?.state;
                 if (!remoteState || typeof remoteState !== 'object') return;
+
+                if ((!Array.isArray(plaidItems) || !plaidItems.length) && Array.isArray(remoteState.plaidItems) && remoteState.plaidItems.length) {
+                    plaidItems = normalizePlaidItems(remoteState.plaidItems);
+                    if (plaidItems.length) persistPlaidItems(plaidItems);
+                }
 
                 if (Number.isFinite(Number(remoteState.income))) state.income = Number(remoteState.income);
                 if (Number.isFinite(Number(remoteState.savings))) state.savings = Number(remoteState.savings);
@@ -4103,17 +4228,21 @@
         const PLAID_ITEMS_STORAGE_KEY = 'plaid_items';
         let plaidHandler = null;
 
+        function normalizePlaidItems(items) {
+            if (!Array.isArray(items)) return [];
+            return items.filter(item => item && item.accessToken).map(item => ({
+                accessToken: item.accessToken,
+                itemId: item.itemId || '',
+                institutionName: item.institutionName || 'Linked institution',
+                linkedAt: item.linkedAt || new Date().toISOString(),
+            }));
+        }
+
         function loadPlaidItems() {
             try {
                 const parsed = JSON.parse(localStorage.getItem(PLAID_ITEMS_STORAGE_KEY) || '[]');
-                if (Array.isArray(parsed) && parsed.length) {
-                    return parsed.filter(item => item && item.accessToken).map(item => ({
-                        accessToken: item.accessToken,
-                        itemId: item.itemId || '',
-                        institutionName: item.institutionName || 'Linked institution',
-                        linkedAt: item.linkedAt || new Date().toISOString(),
-                    }));
-                }
+                const normalized = normalizePlaidItems(parsed);
+                if (normalized.length) return normalized;
             } catch (error) {
                 console.error('Error reading Plaid items from storage:', error);
             }
@@ -4130,10 +4259,11 @@
         }
 
         function persistPlaidItems(items) {
-            localStorage.setItem(PLAID_ITEMS_STORAGE_KEY, JSON.stringify(items));
+            const normalizedItems = normalizePlaidItems(items);
+            localStorage.setItem(PLAID_ITEMS_STORAGE_KEY, JSON.stringify(normalizedItems));
 
-            if (items.length) {
-                const latest = items[items.length - 1];
+            if (normalizedItems.length) {
+                const latest = normalizedItems[normalizedItems.length - 1];
                 localStorage.setItem('plaid_access_token', latest.accessToken);
                 localStorage.setItem('plaid_item_id', latest.itemId || '');
                 localStorage.setItem('plaid_institution', latest.institutionName || 'Linked institution');
@@ -4333,6 +4463,7 @@
                 console.error('Error fetching transactions:', error);
                 const fallbackMessage = 'Connected to Plaid. Transactions are still syncing — please try again in a moment.';
                 alert(error.message ? `Connected to Plaid, but failed to load transactions: ${error.message}` : fallbackMessage);
+                state.accounts = await upsertEstimatedCustomAccounts(state.accounts);
                 updateUI();
             }
         }
@@ -4349,7 +4480,7 @@
                 await fetchTransactions();
             } else {
                 setConnectionState(null);
-                loadDemoData(true);
+                await fetchTransactions();
             }
         }
         attachCurrencyInputFormatting();
