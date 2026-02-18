@@ -1390,6 +1390,12 @@
         .holdings-table td.positive { color: var(--green); }
         .holdings-table td.negative { color: var(--red); }
 
+        .holding-contribution-cell {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .holding-value-cell {
             text-align: right;
         }
@@ -1731,13 +1737,15 @@
             }
             #accountDetailsModal .holdings-table th:first-child,
             #accountDetailsModal .holdings-table td:first-child {
-                width: 38%;
+                width: 34%;
             }
             #accountDetailsModal .holdings-table th:nth-child(2),
-            #accountDetailsModal .holdings-table td:nth-child(2),
+            #accountDetailsModal .holdings-table td:nth-child(2) {
+                width: 42%;
+            }
             #accountDetailsModal .holdings-table th:nth-child(3),
             #accountDetailsModal .holdings-table td:nth-child(3) {
-                width: 31%;
+                width: 24%;
             }
             #accountDetailsModal .holdings-table th:nth-child(2),
             #accountDetailsModal .holdings-table td:nth-child(2) {
@@ -2668,14 +2676,8 @@
                     .filter((entry) => entry.date && Number.isFinite(entry.amount) && entry.amount > 0)
                 : [];
 
-            const futureExplicitWithdrawals = Array.isArray(customAsset.withdrawals)
-                ? customAsset.withdrawals
-                    .map((entry) => ({
-                        date: typeof entry?.date === 'string' ? entry.date : null,
-                        amount: Math.abs(Number(entry?.amount || 0)),
-                    }))
-                    .filter((entry) => entry.date && entry.date > todayIso && Number.isFinite(entry.amount) && entry.amount > 0)
-                : [];
+            const postedExplicitWithdrawals = explicitWithdrawals.filter((entry) => entry.date <= todayIso);
+            const futureExplicitWithdrawals = explicitWithdrawals.filter((entry) => entry.date > todayIso);
 
             const cashflowMap = {};
             contributionDates.forEach((dateIso) => {
@@ -2684,13 +2686,13 @@
             withdrawalDates.forEach((dateIso) => {
                 cashflowMap[dateIso] = (cashflowMap[dateIso] || 0) - recurringWithdrawalAmount;
             });
-            explicitWithdrawals.forEach((entry) => {
+            postedExplicitWithdrawals.forEach((entry) => {
                 cashflowMap[entry.date] = (cashflowMap[entry.date] || 0) - entry.amount;
             });
 
             const totalContributions = contributionDates.length * contributionAmount;
             const totalWithdrawals = (withdrawalDates.length * recurringWithdrawalAmount)
-                + explicitWithdrawals.reduce((sum, entry) => sum + entry.amount, 0);
+                + postedExplicitWithdrawals.reduce((sum, entry) => sum + entry.amount, 0);
             const nextRecurringWithdrawalDate = getNextRecurringEventDate(
                 customAsset.nextWithdrawalDate,
                 customAsset.withdrawalFrequencyDays || 0,
@@ -2705,7 +2707,7 @@
                 cashflowMap,
                 totalContributions,
                 totalWithdrawals,
-                totalWithdrawalEvents: withdrawalDates.length + explicitWithdrawals.length,
+                totalWithdrawalEvents: withdrawalDates.length + postedExplicitWithdrawals.length,
                 nextRecurringWithdrawalDate,
                 futureWithdrawalsTotal,
                 futureWithdrawalEvents: futureExplicitWithdrawals.length + (nextRecurringWithdrawalDate ? 1 : 0),
@@ -2765,6 +2767,12 @@
             const performancePct = performanceBase > 0
                 ? Number((((estimatedBalance - netContributed) / performanceBase) * 100).toFixed(1))
                 : null;
+            const yearStartIso = `${new Date().getFullYear()}-01-01`;
+            const ytdStartClose = getCloseOnOrBefore(history, yearStartIso);
+            const currentClose = getCloseOnOrBefore(history, todayIso);
+            const ytdPerformancePct = (Number.isFinite(ytdStartClose) && Number.isFinite(currentClose) && ytdStartClose > 0)
+                ? Number((((currentClose - ytdStartClose) / ytdStartClose) * 100).toFixed(1))
+                : performancePct;
 
             return {
                 id: customAsset.id,
@@ -2791,12 +2799,12 @@
                     performancePct,
                 },
                 holdings: [{
-                    symbol: 'VT',
+                    symbol: 'Custom Portfolio',
                     name: 'Custom Portfolio',
                     value: Number(estimatedBalance.toFixed(2)),
                     weight: 100,
                     livePct: performancePct,
-                    ytdPct: performancePct,
+                    ytdPct: ytdPerformancePct,
                 }],
             };
         }
@@ -3672,7 +3680,7 @@
                 </tr>`;
             } else {
                 tableEl.classList.remove('liability-details-table');
-                tableHead.innerHTML = '<tr><th>Holding</th><th>Value</th><th>Contributed</th><th>Weight</th></tr>';
+                tableHead.innerHTML = '<tr><th>Contributions</th><th>Value</th><th>Weight</th></tr>';
                 const ytdPct = computePerformancePct(account, kind);
                 const holdings = (account.holdings && account.holdings.length)
                     ? account.holdings
@@ -3697,17 +3705,16 @@
                     const contributionValue = Number(account?.estimationMeta?.netContributed);
                     const contributionDisplay = Number.isFinite(contributionValue) ? formatCurrency(contributionValue) : '--';
                     return `<tr class="holding-main-row">
-                        <td><span class="holding-symbol">${h.symbol || '--'}</span></td>
+                        <td class="holding-contribution-cell">${contributionDisplay}</td>
                         <td class="holding-value-cell">
                             <div class="holding-value-stack">
                                 <div class="holding-value-main">${formatCurrency(holdValue)}</div>
                                 <div class="holding-performance-row">
                                     <span class="holding-performance-item ${liveClass}">C: ${formatPercent(holdLive)}</span>
-                                    <span class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</span>
+                                    <span class="holding-performance-item ${ytdClass}">YTD: ${formatPercent(holdYtd)}</span>
                                 </div>
                             </div>
                         </td>
-                        <td>${contributionDisplay}</td>
                         <td>${holdWeight.toFixed(1)}%</td>
                     </tr>`;
                 }).join('');

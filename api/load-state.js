@@ -15,6 +15,7 @@ function emptyPayload() {
     accountOverrides: {},
     transactionOverrides: {},
     customAssets: [],
+    plaidItems: [],
   };
 }
 
@@ -33,6 +34,7 @@ function normalizePayload(payload) {
     accountOverrides: payload.accountOverrides && typeof payload.accountOverrides === 'object' ? payload.accountOverrides : {},
     transactionOverrides: payload.transactionOverrides && typeof payload.transactionOverrides === 'object' ? payload.transactionOverrides : {},
     customAssets: Array.isArray(payload.customAssets) ? payload.customAssets : [],
+    plaidItems: Array.isArray(payload.plaidItems) ? payload.plaidItems : [],
   };
 }
 
@@ -60,25 +62,6 @@ module.exports = async (req, res) => {
     if (!data) return res.status(200).json({ state: emptyPayload(), found: false });
 
     let payload = normalizePayload(data.payload);
-
-    if (cycleId && data.cycle_id && data.cycle_id !== cycleId) {
-      payload = {
-        ...payload,
-        transactions: [],
-        transactionOverrides: {},
-      };
-
-      const { error: updateError } = await supabase
-        .from(BUDGET_STATE_TABLE)
-        .upsert({
-          profile_id: profileId,
-          cycle_id: cycleId,
-          payload,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'profile_id' });
-
-      if (updateError) throw updateError;
-    }
 
     return res.status(200).json({
       state: payload,
