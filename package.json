@@ -2,6 +2,7 @@
   "name": "raelyboy",
   "version": "1.0.0",
   "dependencies": {
-    "plaid": "^16.0.0"
+    "plaid": "^16.0.0",
+    "@supabase/supabase-js": "^2.49.1"
   }
 }

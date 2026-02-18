@@ -782,6 +782,17 @@
             text-transform: uppercase;
         }
 
+        .refund-badge {
+            background: #34d399;
+            color: #062015;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-left: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
         .edit-icon {
             font-size: 16px;
             color: var(--text-tertiary);
@@ -1900,12 +1911,32 @@
                     <span class="setting-label">Status</span>
                     <span class="setting-value" id="statusText">Not connected</span>
                 </div>
+                <div class="setting-item editable" onclick="openDatasetModal()" title="Click to copy or update shared dataset id">
+                    <span class="setting-label">Shared Dataset ID</span>
+                    <span class="setting-value setting-value-wrap editable-value" id="sidebarDatasetId">--</span>
+                </div>
                 <button class="btn btn-primary" id="connectBtn" onclick="connectPlaid()">Connect Account</button>
             </div>
 
             <div class="sidebar-section">
                 <div class="sidebar-section-title">Export</div>
                 <button class="btn btn-secondary" onclick="exportToCSV(); toggleSidebar();">Download CSV</button>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="modal" id="datasetModal">
+        <div class="modal-content">
+            <div class="modal-header">Shared Dataset ID</div>
+            <label class="form-label" for="datasetIdInput">Use this same ID on every device to share one dataset.</label>
+            <input type="text" id="datasetIdInput" class="form-input" placeholder="shared-dataset-id" onkeydown="handleEnterSave(event, saveDatasetId)">
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="copyDatasetId()">Copy ID</button>
+                <button class="btn btn-primary" onclick="saveDatasetId()">Save</button>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn--compact" onclick="closeModal('datasetModal')">Close</button>
             </div>
         </div>
     </div>
@@ -2206,7 +2237,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
-        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], accountVisibility: {}, lastAccountsUpdatedAt: null };
+        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], accountVisibility: {}, lastAccountsUpdatedAt: null, customAssets: [] };
         let editingFixedExpenseIndex = null;
         let currentReimbursableIndex = null;
         let currentRenameAccountId = null;
@@ -2217,7 +2248,27 @@
 
         const BILLING_HISTORY_KEY = 'budget_billing_history_v1';
         const ACCOUNT_VISIBILITY_KEY = 'budget_account_visibility_v1';
+        const ACCOUNT_OVERRIDES_KEY = 'budget_account_overrides_v1';
+        const TRANSACTION_OVERRIDES_KEY = 'budget_transaction_overrides_v1';
+        const PROFILE_ID_KEY = 'budget_profile_id_v1';
         const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+        let remoteSaveTimer = null;
+        let isHydratingRemoteState = false;
+
+        const DEFAULT_SEIA_401K = {
+            id: 'custom::seia-401k',
+            name: 'SEIA 401(k)',
+            type: 'depository',
+            subtype: 'retirement',
+            custodian: 'SEIA (Manual)',
+            startBalance: 21068.89,
+            startDate: '2026-02-17',
+            contributionAmount: 365.39,
+            contributionFrequencyDays: 14,
+            nextContributionDate: '2026-02-20',
+            proxySymbol: 'vt.us',
+        };
 
         function loadBillingHistory() {
             try {
@@ -2249,6 +2300,38 @@
 
         function persistAccountVisibility() {
             localStorage.setItem(ACCOUNT_VISIBILITY_KEY, JSON.stringify(state.accountVisibility || {}));
+        }
+
+        function loadAccountOverrides() {
+            try {
+                const raw = localStorage.getItem(ACCOUNT_OVERRIDES_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (error) {
+                console.warn('Unable to parse account overrides, resetting.', error);
+                return {};
+            }
+        }
+
+        function persistAccountOverrides(overrides) {
+            localStorage.setItem(ACCOUNT_OVERRIDES_KEY, JSON.stringify(overrides || {}));
+        }
+
+        function loadTransactionOverrides() {
+            try {
+                const raw = localStorage.getItem(TRANSACTION_OVERRIDES_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (error) {
+                console.warn('Unable to parse transaction overrides, resetting.', error);
+                return {};
+            }
+        }
+
+        function persistTransactionOverrides(overrides) {
+            localStorage.setItem(TRANSACTION_OVERRIDES_KEY, JSON.stringify(overrides || {}));
         }
 
         function getAccountVisibility(accountId) {
@@ -2496,6 +2579,136 @@
             window.URL.revokeObjectURL(url);
         }
 
+        function parseIsoDateToUtc(dateString) {
+            if (typeof dateString !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return null;
+            const date = new Date(`${dateString}T00:00:00.000Z`);
+            if (Number.isNaN(date.getTime())) return null;
+            return date;
+        }
+
+        function formatDateToIso(dateObj) {
+            const d = new Date(dateObj);
+            if (Number.isNaN(d.getTime())) return null;
+            const yyyy = d.getUTCFullYear();
+            const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(d.getUTCDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        function ensureDefaultCustomAssets() {
+            if (!Array.isArray(state.customAssets)) state.customAssets = [];
+            const existing = state.customAssets.find((asset) => asset?.id === DEFAULT_SEIA_401K.id);
+            if (!existing) state.customAssets.push({ ...DEFAULT_SEIA_401K });
+        }
+
+        async function fetchProxyHistory(symbol, startDate) {
+            try {
+                const response = await fetch('/api/get-proxy-performance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol, start_date: startDate }),
+                });
+                const data = await response.json();
+                if (!response.ok) return [];
+                return Array.isArray(data?.history) ? data.history : [];
+            } catch (error) {
+                console.warn('Unable to fetch proxy performance data:', error);
+                return [];
+            }
+        }
+
+        function getCloseOnOrBefore(history, targetIsoDate) {
+            if (!Array.isArray(history) || !history.length) return null;
+            const eligible = history.filter((entry) => entry?.date && entry.date <= targetIsoDate && Number.isFinite(Number(entry.close)));
+            if (!eligible.length) return null;
+            const last = eligible.sort((a, b) => a.date.localeCompare(b.date))[eligible.length - 1];
+            return Number(last.close);
+        }
+
+        function buildBiweeklyContributionDates(nextContributionDate, frequencyDays, endDate) {
+            const dates = [];
+            const start = parseIsoDateToUtc(nextContributionDate);
+            if (!start || !Number.isFinite(Number(frequencyDays)) || frequencyDays <= 0) return dates;
+            const end = parseIsoDateToUtc(endDate);
+            if (!end) return dates;
+
+            let cursor = new Date(start);
+            while (cursor <= end) {
+                const iso = formatDateToIso(cursor);
+                if (iso) dates.push(iso);
+                cursor.setUTCDate(cursor.getUTCDate() + Number(frequencyDays));
+            }
+            return dates;
+        }
+
+        async function buildEstimatedCustomAccount(customAsset) {
+            const history = await fetchProxyHistory(customAsset.proxySymbol || 'vt.us', customAsset.startDate);
+            const todayIso = formatDateToIso(new Date());
+            const startClose = getCloseOnOrBefore(history, customAsset.startDate);
+            const latestClose = getCloseOnOrBefore(history, todayIso);
+            const growthFactorFrom = (isoDate) => {
+                const referenceClose = getCloseOnOrBefore(history, isoDate);
+                if (!referenceClose || !latestClose) return 1;
+                return latestClose / referenceClose;
+            };
+
+            const contributionDates = buildBiweeklyContributionDates(
+                customAsset.nextContributionDate,
+                customAsset.contributionFrequencyDays || 14,
+                todayIso,
+            );
+
+            const startingBalance = Number(customAsset.startBalance || 0);
+            const contributionAmount = Number(customAsset.contributionAmount || 0);
+            const projectedFromStart = startingBalance * (startClose && latestClose ? (latestClose / startClose) : 1);
+            const projectedContributions = contributionDates.reduce((sum, dateIso) => {
+                return sum + (contributionAmount * growthFactorFrom(dateIso));
+            }, 0);
+            const estimatedBalance = projectedFromStart + projectedContributions;
+            const totalContributed = startingBalance + (contributionDates.length * contributionAmount);
+            const performancePct = totalContributed > 0
+                ? Number((((estimatedBalance - totalContributed) / totalContributed) * 100).toFixed(1))
+                : null;
+
+            return {
+                id: customAsset.id,
+                name: customAsset.name,
+                type: customAsset.type || 'depository',
+                subtype: customAsset.subtype || 'retirement',
+                custodian: customAsset.custodian || 'Manual',
+                balance: Number(estimatedBalance.toFixed(2)),
+                customAsset: true,
+                estimationMeta: {
+                    proxySymbol: (customAsset.proxySymbol || 'vt.us').toUpperCase(),
+                    startDate: customAsset.startDate,
+                    nextContributionDate: customAsset.nextContributionDate,
+                    contributionAmount,
+                    contributionFrequencyDays: customAsset.contributionFrequencyDays || 14,
+                    totalContributionsIncluded: contributionDates.length,
+                    totalContributed: Number(totalContributed.toFixed(2)),
+                    performancePct,
+                },
+                holdings: [{
+                    symbol: 'VT',
+                    name: 'Vanguard Total World Stock ETF (Proxy)',
+                    value: Number(estimatedBalance.toFixed(2)),
+                    weight: 100,
+                    livePct: performancePct,
+                    ytdPct: performancePct,
+                }],
+            };
+        }
+
+        async function upsertEstimatedCustomAccounts(baseAccounts = []) {
+            ensureDefaultCustomAssets();
+            const generated = [];
+            for (const customAsset of state.customAssets) {
+                generated.push(await buildEstimatedCustomAccount(customAsset));
+            }
+            const nonCustom = (baseAccounts || []).filter((acc) => !acc?.customAsset);
+            return [...nonCustom, ...generated];
+        }
+
         function loadDemoData(preserveSettings = false) {
             const demoState = {
                 income: 6500, savings: 1000, budgetStartDay: 4, billingHistory: state.billingHistory || [],
@@ -2549,8 +2762,9 @@
                     fixedExpenses: state.fixedExpenses.length ? state.fixedExpenses : demoState.fixedExpenses,
                     billingHistory: state.billingHistory || demoState.billingHistory || [],
                     accountVisibility: state.accountVisibility || {},
+                    customAssets: Array.isArray(state.customAssets) ? state.customAssets : [],
                 }
-                : { ...demoState, accountVisibility: state.accountVisibility || {} };
+                : { ...demoState, accountVisibility: state.accountVisibility || {}, customAssets: Array.isArray(state.customAssets) ? state.customAssets : [] };
             state.lastAccountsUpdatedAt = new Date().toISOString();
 
             updateUI();
@@ -2908,9 +3122,180 @@
             });
         }
 
-        function setTextIfPresent(id, value) {
-            const el = document.getElementById(id);
-            if (el) el.textContent = value;
+
+        function isCreditRefund(tx) {
+            return tx?.account === 'credit' && Number(tx?.amount) > 0;
+        }
+
+        function getCurrentCycleTransactionWindow() {
+            const cycle = getCurrentCycleRange();
+            const endInclusive = new Date(cycle.end);
+            endInclusive.setDate(endInclusive.getDate());
+            return {
+                start_date: cycle.start.toISOString().split('T')[0],
+                end_date: endInclusive.toISOString().split('T')[0],
+            };
+        }
+
+        function getTransactionBudgetImpact(tx) {
+            if (!tx) return 0;
+            if (Number(tx.amount) < 0) {
+                return Math.max(0, Math.abs(tx.amount) - (tx.reimbursable || 0));
+            }
+            if (isCreditRefund(tx)) {
+                return -Math.abs(Number(tx.amount) || 0);
+            }
+            return 0;
+        }
+
+        function sanitizeTransactionLabel(rawName) {
+            const base = String(rawName || '').replace(/\s+/g, ' ').trim();
+            if (!base) return 'Transaction';
+            const withoutCodes = base
+                .replace(/\b\d{3,}\b/g, '')
+                .replace(/\b(?:pos|ach|dbt|debit|credit|purchase|payment)\b/gi, '')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+            const normalized = withoutCodes || base;
+            return normalized
+                .split(' ')
+                .filter(Boolean)
+                .map(word => word.length <= 3 ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+        }
+
+        function getProfileId() {
+            let profileId = localStorage.getItem(PROFILE_ID_KEY);
+            if (profileId) return profileId;
+            profileId = (window.crypto && window.crypto.randomUUID)
+                ? window.crypto.randomUUID()
+                : `profile-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+            localStorage.setItem(PROFILE_ID_KEY, profileId);
+            return profileId;
+        }
+
+        function formatDatasetId(profileId) {
+            const raw = String(profileId || '').trim();
+            if (!raw) return '--';
+            if (raw.length <= 14) return raw;
+            return `${raw.slice(0, 8)}…${raw.slice(-4)}`;
+        }
+
+        function openDatasetModal() {
+            document.getElementById('datasetIdInput').value = getProfileId();
+            document.getElementById('datasetModal').classList.add('active');
+            if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
+        }
+
+        async function copyDatasetId() {
+            const profileId = getProfileId();
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(profileId);
+                    alert('Dataset ID copied. Paste this ID on your other device.');
+                }
+            } catch (error) {
+                console.warn('Unable to copy dataset id:', error);
+            }
+        }
+
+        function saveDatasetId() {
+            const input = document.getElementById('datasetIdInput');
+            const nextId = String(input?.value || '').trim();
+            if (!nextId || nextId.length < 8) {
+                alert('Please enter a valid shared dataset id.');
+                return;
+            }
+            localStorage.setItem(PROFILE_ID_KEY, nextId);
+            closeModal('datasetModal');
+            window.location.reload();
+        }
+
+        function getCurrentCycleId() {
+            const { start } = getCurrentCycleRange();
+            return start.toISOString().split('T')[0];
+        }
+
+        function buildRemoteStatePayload() {
+            return {
+                income: state.income || 0,
+                savings: state.savings || 0,
+                budgetStartDay: state.budgetStartDay || 4,
+                fixedExpenses: Array.isArray(state.fixedExpenses) ? state.fixedExpenses : [],
+                billingHistory: Array.isArray(state.billingHistory) ? state.billingHistory : [],
+                accountVisibility: state.accountVisibility || {},
+                accounts: Array.isArray(state.accounts) ? state.accounts : [],
+                transactions: Array.isArray(state.transactions) ? state.transactions : [],
+                lastAccountsUpdatedAt: state.lastAccountsUpdatedAt || null,
+                accountOverrides: loadAccountOverrides(),
+                transactionOverrides: loadTransactionOverrides(),
+                customAssets: Array.isArray(state.customAssets) ? state.customAssets : [],
+            };
+        }
+
+        async function persistRemoteState() {
+            if (isHydratingRemoteState) return;
+            try {
+                await fetch('/api/save-state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profileId: getProfileId(),
+                        cycleId: getCurrentCycleId(),
+                        state: buildRemoteStatePayload(),
+                    }),
+                });
+            } catch (error) {
+                console.warn('Failed to persist state to Supabase:', error);
+            }
+        }
+
+        function queueRemoteStateSave() {
+            clearTimeout(remoteSaveTimer);
+            remoteSaveTimer = setTimeout(() => {
+                persistRemoteState();
+            }, 700);
+        }
+
+        async function loadRemoteState() {
+            isHydratingRemoteState = true;
+            try {
+                const response = await fetch('/api/load-state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profileId: getProfileId(),
+                        cycleId: getCurrentCycleId(),
+                    }),
+                });
+
+                if (!response.ok) return;
+                const data = await response.json();
+                const remoteState = data?.state;
+                if (!remoteState || typeof remoteState !== 'object') return;
+
+                if (Number.isFinite(Number(remoteState.income))) state.income = Number(remoteState.income);
+                if (Number.isFinite(Number(remoteState.savings))) state.savings = Number(remoteState.savings);
+                if (Number.isFinite(Number(remoteState.budgetStartDay))) state.budgetStartDay = Number(remoteState.budgetStartDay);
+                if (Array.isArray(remoteState.fixedExpenses)) state.fixedExpenses = remoteState.fixedExpenses;
+                if (Array.isArray(remoteState.billingHistory)) state.billingHistory = remoteState.billingHistory;
+                if (remoteState.accountVisibility && typeof remoteState.accountVisibility === 'object') state.accountVisibility = remoteState.accountVisibility;
+                if (Array.isArray(remoteState.accounts) && remoteState.accounts.length) state.accounts = remoteState.accounts;
+                if (Array.isArray(remoteState.transactions) && remoteState.transactions.length) state.transactions = remoteState.transactions;
+                if (remoteState.lastAccountsUpdatedAt) state.lastAccountsUpdatedAt = remoteState.lastAccountsUpdatedAt;
+                if (Array.isArray(remoteState.customAssets)) state.customAssets = remoteState.customAssets;
+
+                if (remoteState.accountOverrides && typeof remoteState.accountOverrides === 'object') {
+                    persistAccountOverrides(remoteState.accountOverrides);
+                }
+                if (remoteState.transactionOverrides && typeof remoteState.transactionOverrides === 'object') {
+                    persistTransactionOverrides(remoteState.transactionOverrides);
+                }
+            } catch (error) {
+                console.warn('Failed to load state from Supabase:', error);
+            } finally {
+                isHydratingRemoteState = false;
+            }
         }
 
         function updateUI() {
@@ -2921,13 +3306,13 @@
             setTextIfPresent('daysRemaining', `${getBudgetPeriod()} • ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`);
             
             const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
-            const budgetTransactions = state.transactions.filter(t => t.amount < 0 && (t.account !== 'checking' || t.includeInBudget));
+            const budgetTransactions = state.transactions.filter(t => (Number(t.amount) < 0 && (t.account !== 'checking' || t.includeInBudget)) || isCreditRefund(t));
             const postedSpent = Math.round(budgetTransactions
                 .filter(t => !t.pending)
-                .reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0));
+                .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0));
             const pendingSpent = Math.round(budgetTransactions
                 .filter(t => t.pending)
-                .reduce((sum, t) => sum + Math.abs(t.amount) - (t.reimbursable || 0), 0));
+                .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0));
             const variableSpent = postedSpent + pendingSpent;
             const available = state.income - totalFixed - state.savings - variableSpent;
             const budgetTotal = state.income - totalFixed - state.savings;
@@ -2953,6 +3338,7 @@
             setTextIfPresent('sidebarIncome', `$${Math.round(state.income).toLocaleString()}`);
             setTextIfPresent('sidebarSavings', `$${Math.round(state.savings).toLocaleString()}`);
             setTextIfPresent('sidebarPeriod', `${state.budgetStartDay}${getOrdinalSuffix(state.budgetStartDay)}`);
+            setTextIfPresent('sidebarDatasetId', formatDatasetId(getProfileId()));
             
             const sidebarFixedList = document.getElementById('sidebarFixedList');
             if (state.fixedExpenses.length > 0) {
@@ -2970,6 +3356,7 @@
             
             updateTransactions();
             renderAccountsWidget();
+            queueRemoteStateSave();
         }
 
         function isLiabilityAccount(acc) {
@@ -3013,25 +3400,47 @@
         }
 
         function computePerformancePct(account, kind) {
+            if (kind !== 'asset') return null;
+            if (account?.customAsset && Number.isFinite(Number(account?.estimationMeta?.performancePct))) return Number(account.estimationMeta.performancePct);
             const value = Number(account.balance || 0);
+            if (Math.abs(value) === 0) return null;
             const currentYear = new Date().getFullYear();
             const accountTx = state.transactions.filter(tx => tx.accountId === account.id && new Date(tx.date).getFullYear() === currentYear);
-            if (!accountTx.length || Math.abs(value) === 0) return null;
-            const ytdRaw = kind === 'liability'
-                ? accountTx.reduce((sum, tx) => sum + Math.max(0, tx.amount || 0), 0)
-                : accountTx.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-            const denominator = Math.abs(value);
-            return Number(((ytdRaw / denominator) * 100).toFixed(1));
+            if (!accountTx.length) return null;
+            const netInflow = accountTx.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+            const startingEstimate = value - netInflow;
+            if (Math.abs(startingEstimate) < 1) return null;
+            return Number((((value - startingEstimate) / Math.abs(startingEstimate)) * 100).toFixed(1));
+        }
+
+
+        function computeMonthlyRollingDate(anchorIsoDate, referenceDate = new Date()) {
+            if (typeof anchorIsoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(anchorIsoDate)) return null;
+            const [year, month, day] = anchorIsoDate.split('-').map(Number);
+            const ref = new Date(referenceDate);
+            if (Number.isNaN(ref.getTime())) return anchorIsoDate;
+
+            let next = new Date(year, month - 1, day);
+            if (Number.isNaN(next.getTime())) return anchorIsoDate;
+
+            while (next < ref) {
+                next = new Date(next.getFullYear(), next.getMonth() + 1, day);
+            }
+
+            return next.toISOString().split('T')[0];
         }
 
         function getLiabilityDetails(account) {
             const parsedInterestRate = Number(account.interestRate);
             const parsedPaymentAmount = Number(account.paymentAmount);
+            const custodian = String(account.custodian || '').toLowerCase();
+            const accountName = String(account.name || '').toLowerCase();
+            const isFirstTechLinkedLiability = custodian.includes('first tech') && /line of credit|credit line|credit card|loan/.test(accountName);
             return {
-                interestRate: Number.isFinite(parsedInterestRate) ? parsedInterestRate : null,
+                interestRate: isFirstTechLinkedLiability ? 2.84 : (Number.isFinite(parsedInterestRate) ? parsedInterestRate : null),
                 termMonths: Number(account.termMonths || 0),
-                nextPaymentDate: account.nextPaymentDate || null,
-                paymentAmount: Number.isFinite(parsedPaymentAmount) ? parsedPaymentAmount : null,
+                nextPaymentDate: isFirstTechLinkedLiability ? computeMonthlyRollingDate('2026-03-21') : (account.nextPaymentDate || null),
+                paymentAmount: isFirstTechLinkedLiability ? 550 : (Number.isFinite(parsedPaymentAmount) ? parsedPaymentAmount : null),
             };
         }
 
@@ -3205,6 +3614,9 @@
             const nextName = document.getElementById('accountDetailsNameInput').value.trim();
             if (!nextName) return;
             account.name = nextName;
+            const overrides = loadAccountOverrides();
+            overrides[account.id] = { ...(overrides[account.id] || {}), name: nextName };
+            persistAccountOverrides(overrides);
             updateUI();
             closeModal('accountDetailsModal');
         }
@@ -3310,7 +3722,7 @@
             }
             
             list.innerHTML = transactions.map(tx => {
-                const actualIndex = state.transactions.findIndex(t => t.name === tx.name && t.date === tx.date && t.amount === tx.amount);
+                const actualIndex = state.transactions.findIndex(t => t.id === tx.id);
                 const isPositive = tx.amount > 0;
                 const isLinked = state.transactions.some(t => t.linkedDeposit === actualIndex);
                 const linkedDeposit = tx.linkedDeposit !== null && tx.linkedDeposit !== undefined ? state.transactions[tx.linkedDeposit] : null;
@@ -3318,6 +3730,8 @@
                 
                 const linkedIcon = (linkedDeposit || isLinked) ? '<span class="badge">🔗</span>' : '';
                 const pendingBadge = tx.pending ? '<span class="pending-badge">Pending</span>' : '';
+                const refundBadge = isCreditRefund(tx) ? '<span class="refund-badge">Refund</span>' : '';
+                const displayName = tx.displayName || sanitizeTransactionLabel(tx.name);
                 const categoryEmoji = getTransactionEmoji(tx);
                 const transactionDate = formatTransactionDate(tx.date);
                 
@@ -3339,9 +3753,10 @@
                             <span class="category-emoji">${categoryEmoji}</span>
                             <span class="transaction-details">
                                 <span class="transaction-title">
-                                    ${tx.name}
+                                    ${displayName}
                                     ${linkedIcon}
                                     ${pendingBadge}
+                                    ${refundBadge}
                                     ${account === 'credit' ? '<span class="edit-icon">✎</span>' : ''}${account === 'checking' && tx.amount < 0 ? `<button class="include-plus-btn ${tx.includeInBudget ? 'active' : ''}" title="Include in period expenses" onclick="event.stopPropagation(); toggleCheckingBudgetInclusion(${actualIndex})">+</button>` : ''}
                                 </span>
                                 <span class="transaction-date">${transactionDate}</span>
@@ -3357,6 +3772,10 @@
             const tx = state.transactions[index];
             if (!tx || tx.account !== 'checking' || tx.amount >= 0) return;
             tx.includeInBudget = !tx.includeInBudget;
+            const overrides = loadTransactionOverrides();
+            const txId = tx.id || `${tx.accountId || 'account'}::${tx.name}::${tx.date}`;
+            overrides[txId] = { ...(overrides[txId] || {}), includeInBudget: tx.includeInBudget };
+            persistTransactionOverrides(overrides);
             updateUI();
         }
 
@@ -3365,7 +3784,7 @@
             const searchTerm = document.getElementById(searchId).value.toLowerCase();
             let transactions = state.transactions.filter(t => t.account === account);
             if (searchTerm) {
-                transactions = transactions.filter(t => t.name.toLowerCase().includes(searchTerm) || (t.category && t.category.toLowerCase().includes(searchTerm)));
+                transactions = transactions.filter(t => (t.displayName || t.name).toLowerCase().includes(searchTerm) || (t.category && t.category.toLowerCase().includes(searchTerm)));
             }
             if (account === 'credit') {
                 const categoryFilter = document.getElementById('creditCategoryFilter').value;
@@ -3476,7 +3895,8 @@
         function openReimbursableModal(index) {
             currentReimbursableIndex = index;
             const tx = state.transactions[index];
-            document.getElementById('reimbursableTransactionName').textContent = `${tx.name} – $${Math.round(Math.abs(tx.amount)).toLocaleString()}`;
+            const displayName = tx.displayName || sanitizeTransactionLabel(tx.name);
+            document.getElementById('reimbursableTransactionName').textContent = `${displayName} – $${Math.round(Math.abs(tx.amount)).toLocaleString()}`;
             document.getElementById('categorySelect').value = tx.category || autoCategorize(tx.name);
             const depositSelect = document.getElementById('linkedDepositSelect');
             const checkingDeposits = state.transactions.map((t, idx) => ({ ...t, originalIndex: idx })).filter(t => t.account === 'checking' && t.amount > 0);
@@ -3580,6 +4000,18 @@
                     targetTx.reimbursable = Math.min(maxReimbursable, Math.max(0, manualAmount));
                     targetTx.linkedDeposit = null;
                 }
+                const overrides = loadTransactionOverrides();
+                const txId = targetTx.id || `${targetTx.accountId || 'account'}::${targetTx.name}::${targetTx.date}`;
+                overrides[txId] = {
+                    ...(overrides[txId] || {}),
+                    category: targetTx.category,
+                    reimbursable: targetTx.reimbursable,
+                    linkedDeposit: targetTx.linkedDeposit,
+                    splitPeople: targetTx.splitPeople,
+                    displayName: targetTx.displayName || sanitizeTransactionLabel(targetTx.name),
+                    name: targetTx.name,
+                };
+                persistTransactionOverrides(overrides);
                 updateUI();
                 closeModal('reimbursableModal');
                 currentReimbursableIndex = null;
@@ -3593,6 +4025,9 @@
             const nextName = document.getElementById('renameAccountInput').value.trim();
             if (!nextName) return;
             account.name = nextName;
+            const overrides = loadAccountOverrides();
+            overrides[account.id] = { ...(overrides[account.id] || {}), name: nextName };
+            persistAccountOverrides(overrides);
             updateUI();
             closeModal('renameAccountModal');
         }
@@ -3800,6 +4235,8 @@
             if (!plaidItems.length) {
                 console.log('No Plaid items, loading demo data');
                 loadDemoData(true);
+                state.accounts = await upsertEstimatedCustomAccounts(state.accounts);
+                updateUI();
                 return;
             }
 
@@ -3808,7 +4245,7 @@
                     const response = await fetch('/api/get-transactions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ access_token: item.accessToken }),
+                        body: JSON.stringify({ access_token: item.accessToken, ...getCurrentCycleTransactionWindow() }),
                     });
 
                     const data = await response.json();
@@ -3861,8 +4298,29 @@
                     });
                 });
 
-                state.transactions = mergedTransactions;
-                state.accounts = mergedAccounts;
+                const accountOverrides = loadAccountOverrides();
+                const transactionOverrides = loadTransactionOverrides();
+
+                state.accounts = (await upsertEstimatedCustomAccounts(mergedAccounts)).map((acc) => {
+                    const override = accountOverrides[acc.id] || {};
+                    return {
+                        ...acc,
+                        name: override.name || acc.name,
+                    };
+                });
+                state.transactions = mergedTransactions.map((tx) => {
+                    const override = transactionOverrides[tx.id] || {};
+                    return normalizeTransactionCategory({
+                        ...tx,
+                        name: override.name || tx.name,
+                        displayName: override.displayName || tx.displayName || sanitizeTransactionLabel(override.name || tx.name),
+                        category: override.category || tx.category,
+                        reimbursable: override.reimbursable ?? tx.reimbursable,
+                        linkedDeposit: override.linkedDeposit ?? tx.linkedDeposit,
+                        includeInBudget: typeof override.includeInBudget === 'boolean' ? override.includeInBudget : tx.includeInBudget,
+                        splitPeople: override.splitPeople ?? tx.splitPeople,
+                    });
+                });
                 state.lastAccountsUpdatedAt = nowIso;
 
                 const failedCount = syncResults.length - successfulResults.length;
@@ -3879,17 +4337,19 @@
             }
         }
 
-        function checkConnection() {
+        async function checkConnection() {
             plaidItems = loadPlaidItems();
             state.billingHistory = loadBillingHistory();
             state.accountVisibility = loadAccountVisibility();
 
+            await loadRemoteState();
+
             if (plaidItems.length) {
                 setConnectionState(getConnectionLabel());
-                fetchTransactions();
+                await fetchTransactions();
             } else {
                 setConnectionState(null);
-                loadDemoData();
+                loadDemoData(true);
             }
         }
         attachCurrencyInputFormatting();
