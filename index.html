@@ -3438,8 +3438,16 @@
                 const transactionsGrid = document.getElementById('transactionsGrid');
                 if (!transactionsGrid) return;
                 const isRolledUp = transactionsGrid.classList.toggle('rolled-up');
+                const transactionPanels = transactionsGrid.querySelectorAll('.transaction-panel');
                 content.classList.remove('collapsed');
                 toggle.classList.toggle('collapsed', isRolledUp);
+
+                transactionPanels.forEach(panel => {
+                    const panelToggle = panel.querySelector('.toggle-icon');
+                    panel.classList.toggle('is-collapsed', isRolledUp);
+                    if (panelToggle) panelToggle.classList.toggle('collapsed', isRolledUp);
+                });
+
                 return;
             }
 
