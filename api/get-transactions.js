@@ -95,40 +95,64 @@ async function fetchLiabilitiesData(access_token) {
 
 function buildLiabilityByAccountId(liabilities = {}) {
   const liabilityByAccountId = {};
+  const readNumber = (...values) => {
+    for (const value of values) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+
+    return undefined;
+  };
+
+  const upsertLiabilityDetails = (accountId, details) => {
+    if (!accountId) return;
+
+    const existing = liabilityByAccountId[accountId] || {};
+    liabilityByAccountId[accountId] = {
+      ...existing,
+      ...Object.fromEntries(Object.entries(details).filter(([, value]) => value !== undefined && value !== null && value !== '')),
+    };
+  };
 
   (liabilities.credit || []).forEach((entry) => {
-    const apr = Number(entry?.aprs?.[0]?.apr_percentage);
-    if (!entry?.account_id) return;
+    const apr = readNumber(entry?.aprs?.[0]?.apr_percentage);
+    const paymentAmount = readNumber(entry?.minimum_payment_amount, entry?.last_payment_amount);
 
-    liabilityByAccountId[entry.account_id] = {
+    upsertLiabilityDetails(entry?.account_id, {
       interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
       nextPaymentDate: entry?.next_payment_due_date,
-      paymentAmount: Number(entry?.minimum_payment_amount),
-    };
+      paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
+    });
   });
 
   (liabilities.student || []).forEach((entry) => {
-    (entry?.loans || []).forEach((loan) => {
-      const apr = Number(loan?.interest_rate_percentage);
-      if (!loan?.account_id) return;
+    const loans = Array.isArray(entry?.loans) && entry.loans.length ? entry.loans : [entry];
 
-      liabilityByAccountId[loan.account_id] = {
+    loans.forEach((loan) => {
+      const apr = readNumber(loan?.interest_rate_percentage, loan?.interest_rate?.percentage);
+      const paymentAmount = readNumber(
+        loan?.minimum_payment_amount,
+        loan?.next_payment_amount,
+        loan?.last_payment_amount,
+      );
+
+      upsertLiabilityDetails(loan?.account_id || entry?.account_id, {
         interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
-        nextPaymentDate: loan?.next_payment_due_date,
-        paymentAmount: Number(loan?.minimum_payment_amount),
-      };
+        nextPaymentDate: loan?.next_payment_due_date || entry?.next_payment_due_date,
+        paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
+      });
     });
   });
 
   (liabilities.mortgage || []).forEach((entry) => {
-    const apr = Number(entry?.interest_rate?.percentage);
-    if (!entry?.account_id) return;
+    const apr = readNumber(entry?.interest_rate?.percentage);
+    const paymentAmount = readNumber(entry?.next_monthly_payment, entry?.last_payment_amount);
 
-    liabilityByAccountId[entry.account_id] = {
+    upsertLiabilityDetails(entry?.account_id, {
       interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
       nextPaymentDate: entry?.next_payment_due_date,
-      paymentAmount: Number(entry?.next_monthly_payment),
-    };
+      paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
+    });
   });
 
   return liabilityByAccountId;
