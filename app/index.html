@@ -1415,6 +1415,7 @@
 
         .holding-performance-item.positive { color: var(--green); }
         .holding-performance-item.negative { color: var(--red); }
+        .holding-performance-item.neutral { color: var(--text-tertiary); }
 
         .holdings-table.liability-details-table th,
         .holdings-table.liability-details-table td {
@@ -2981,7 +2982,9 @@
         }
 
         function formatPercent(value) {
-            const pct = Number(value || 0);
+            if (value === null || value === undefined || value === '') return '--';
+            const pct = Number(value);
+            if (!Number.isFinite(pct)) return '--';
             return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
         }
 
@@ -3000,10 +3003,11 @@
             const value = Number(account.balance || 0);
             const currentYear = new Date().getFullYear();
             const accountTx = state.transactions.filter(tx => tx.accountId === account.id && new Date(tx.date).getFullYear() === currentYear);
+            if (!accountTx.length || Math.abs(value) === 0) return null;
             const ytdRaw = kind === 'liability'
                 ? accountTx.reduce((sum, tx) => sum + Math.max(0, tx.amount || 0), 0)
                 : accountTx.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-            const denominator = Math.abs(value) > 0 ? Math.abs(value) : 1;
+            const denominator = Math.abs(value);
             return Number(((ytdRaw / denominator) * 100).toFixed(1));
         }
 
@@ -3088,7 +3092,7 @@
                             <td class="account-cell">
                                 <span class="account-name">${acc.name}</span>
                             </td>
-                            <td style="color:${ytdPct >= 0 ? 'var(--green)' : 'var(--red)'}">${formatPercent(ytdPct)}</td>
+                            <td style="color:${ytdPct === null ? 'var(--text-tertiary)' : (ytdPct >= 0 ? 'var(--green)' : 'var(--red)')}">${formatPercent(ytdPct)}</td>
                             <td>${formatCurrency(Math.abs(value))}</td>
                         </tr>`;
                     }).join('');
@@ -3150,17 +3154,17 @@
                     const holdValue = Number(h.value || 0);
                     const holdLiveRaw = h.livePct === null || h.livePct === undefined || h.livePct === '' ? null : Number(h.livePct);
                     const holdYtdRaw = h.ytdPct === null || h.ytdPct === undefined || h.ytdPct === '' ? ytdPct : Number(h.ytdPct);
-                    const holdLive = holdLiveRaw === null && holdValue === 0 ? 0 : holdLiveRaw;
-                    const holdYtd = holdYtdRaw === null && holdValue === 0 ? 0 : holdYtdRaw;
-                    const liveClass = holdLive !== null && holdLive < 0 ? 'negative' : 'positive';
-                    const ytdClass = holdYtd < 0 ? 'negative' : 'positive';
+                    const holdLive = holdLiveRaw;
+                    const holdYtd = Number.isFinite(holdYtdRaw) ? holdYtdRaw : null;
+                    const liveClass = holdLive === null ? 'neutral' : (holdLive < 0 ? 'negative' : 'positive');
+                    const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
                     return `<tr class="holding-main-row">
                         <td><span class="holding-symbol">${h.symbol || '--'}</span></td>
                         <td class="holding-value-cell">
                             <div class="holding-value-stack">
                                 <div class="holding-value-main">${formatCurrency(holdValue)}</div>
                                 <div class="holding-performance-row">
-                                    <span class="holding-performance-item ${liveClass}">C: ${holdLive === null ? '--' : formatPercent(holdLive)}</span>
+                                    <span class="holding-performance-item ${liveClass}">C: ${formatPercent(holdLive)}</span>
                                     <span class="holding-performance-item ${ytdClass}">Y: ${formatPercent(holdYtd)}</span>
                                 </div>
                             </div>
