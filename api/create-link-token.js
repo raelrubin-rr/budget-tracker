@@ -53,9 +53,17 @@ module.exports = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating link token:', error);
+    const plaidDetails = error.response?.data;
+    const detailMessage =
+      plaidDetails?.error_message ||
+      plaidDetails?.display_message ||
+      plaidDetails?.error_code ||
+      error.message;
+
     return res.status(500).json({
       error: 'Failed to create link token',
-      details: error.response?.data || error.message,
+      details: plaidDetails || error.message,
+      message: detailMessage,
     });
   }
 };

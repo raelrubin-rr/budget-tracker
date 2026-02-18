@@ -3517,8 +3517,10 @@
 
                 const data = await response.json();
                 if (!response.ok || !data.link_token) {
-                    const detailsError = typeof data?.details === 'string' ? data.details : data?.details?.error_message;
-                    throw new Error(data?.error || detailsError || 'Failed to create link token');
+                    const detailsError =
+                        data?.message ||
+                        (typeof data?.details === 'string' ? data.details : (data?.details?.error_message || data?.details?.display_message || data?.details?.error_code));
+                    throw new Error(detailsError || data?.error || 'Failed to create link token');
                 }
                 
                 plaidHandler = Plaid.create({
