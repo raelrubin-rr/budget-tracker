@@ -16,6 +16,7 @@ function sanitizeState(payload) {
       accountOverrides: {},
       transactionOverrides: {},
       customAssets: [],
+      plaidItems: [],
     };
   }
 
@@ -32,6 +33,7 @@ function sanitizeState(payload) {
     accountOverrides: payload.accountOverrides && typeof payload.accountOverrides === 'object' ? payload.accountOverrides : {},
     transactionOverrides: payload.transactionOverrides && typeof payload.transactionOverrides === 'object' ? payload.transactionOverrides : {},
     customAssets: Array.isArray(payload.customAssets) ? payload.customAssets : [],
+    plaidItems: Array.isArray(payload.plaidItems) ? payload.plaidItems : [],
   };
 }
 
