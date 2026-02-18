@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
       user: {
         client_user_id: 'user-' + Date.now(),
       },
-      client_name: 'Budget Tracker',
+      client_name: 'Raelyboy',
       products: ['transactions'],
       country_codes: ['US'],
       language: 'en',
