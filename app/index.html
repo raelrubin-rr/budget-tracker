@@ -782,17 +782,6 @@
             text-transform: uppercase;
         }
 
-        .refund-badge {
-            background: #34d399;
-            color: #062015;
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 4px;
-            margin-left: 8px;
-            font-weight: 800;
-            text-transform: uppercase;
-        }
-
         .edit-icon {
             font-size: 16px;
             color: var(--text-tertiary);
@@ -2261,12 +2250,12 @@
             name: 'SEIA 401(k)',
             type: 'depository',
             subtype: 'retirement',
-            custodian: 'SEIA (Manual)',
+            custodian: 'ADP',
             startBalance: 21068.89,
             startDate: '2026-02-17',
             contributionAmount: 365.39,
             contributionFrequencyDays: 14,
-            nextContributionDate: '2026-02-20',
+            nextContributionDate: '2026-01-09',
             proxySymbol: 'vt.us',
         };
 
@@ -2803,7 +2792,7 @@
                 },
                 holdings: [{
                     symbol: 'VT',
-                    name: 'Vanguard Total World Stock ETF (Proxy)',
+                    name: 'Custom Portfolio',
                     value: Number(estimatedBalance.toFixed(2)),
                     weight: 100,
                     livePct: performancePct,
@@ -3679,11 +3668,11 @@
                 tableBody.innerHTML = `<tr>
                     <td>${account.name}</td>
                     <td>${formatShortDate(details.nextPaymentDate)}</td>
-                    <td>${details.paymentAmount !== null ? formatCurrency(details.paymentAmount, true) : '--'}</td>
+                    <td>${details.paymentAmount !== null ? formatCurrency(details.paymentAmount) : '--'}</td>
                 </tr>`;
             } else {
                 tableEl.classList.remove('liability-details-table');
-                tableHead.innerHTML = '<tr><th>Holding</th><th>Value</th><th>Weight</th></tr>';
+                tableHead.innerHTML = '<tr><th>Holding</th><th>Value</th><th>Contributed</th><th>Weight</th></tr>';
                 const ytdPct = computePerformancePct(account, kind);
                 const holdings = (account.holdings && account.holdings.length)
                     ? account.holdings
@@ -3705,6 +3694,8 @@
                     const holdYtd = Number.isFinite(holdYtdRaw) ? holdYtdRaw : null;
                     const liveClass = holdLive === null ? 'neutral' : (holdLive < 0 ? 'negative' : 'positive');
                     const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
+                    const contributionValue = Number(account?.estimationMeta?.netContributed);
+                    const contributionDisplay = Number.isFinite(contributionValue) ? formatCurrency(contributionValue) : '--';
                     return `<tr class="holding-main-row">
                         <td><span class="holding-symbol">${h.symbol || '--'}</span></td>
                         <td class="holding-value-cell">
@@ -3716,6 +3707,7 @@
                                 </div>
                             </div>
                         </td>
+                        <td>${contributionDisplay}</td>
                         <td>${holdWeight.toFixed(1)}%</td>
                     </tr>`;
                 }).join('');
@@ -3855,7 +3847,6 @@
                 
                 const linkedIcon = (linkedDeposit || isLinked) ? '<span class="badge">🔗</span>' : '';
                 const pendingBadge = tx.pending ? '<span class="pending-badge">Pending</span>' : '';
-                const refundBadge = isCreditRefund(tx) ? '<span class="refund-badge">Refund</span>' : '';
                 const displayName = tx.displayName || sanitizeTransactionLabel(tx.name);
                 const categoryEmoji = getTransactionEmoji(tx);
                 const transactionDate = formatTransactionDate(tx.date);
@@ -3881,7 +3872,6 @@
                                     ${displayName}
                                     ${linkedIcon}
                                     ${pendingBadge}
-                                    ${refundBadge}
                                     ${account === 'credit' ? '<span class="edit-icon">✎</span>' : ''}${account === 'checking' && tx.amount < 0 ? `<button class="include-plus-btn ${tx.includeInBudget ? 'active' : ''}" title="Include in period expenses" onclick="event.stopPropagation(); toggleCheckingBudgetInclusion(${actualIndex})">+</button>` : ''}
                                 </span>
                                 <span class="transaction-date">${transactionDate}</span>
@@ -4055,7 +4045,7 @@
                 if (depositSelect.value) return;
                 const people = parseInt(splitPeopleInput.value, 10);
                 if (people && people >= 2) {
-                    document.getElementById('reimbursableAmountInput').value = (Math.abs(tx.amount || 0) / people).toFixed(2);
+                    document.getElementById('reimbursableAmountInput').value = (Math.abs(tx.amount || 0) - (Math.abs(tx.amount || 0) / people)).toFixed(2);
                 }
             };
 
