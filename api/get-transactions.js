@@ -11,6 +11,41 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+
+function toBooleanFlag(value) {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'yes';
+  }
+
+  return false;
+}
+
+function buildLiabilitiesDebugPayload(liabilitiesData = {}, liabilityByAccountId = {}, accounts = []) {
+  const liabilityAccounts = accounts.filter((account) => ['credit', 'loan', 'liability'].includes((account?.type || '').toLowerCase()));
+
+  return {
+    liabilityGroupCounts: {
+      credit: Array.isArray(liabilitiesData.credit) ? liabilitiesData.credit.length : 0,
+      student: Array.isArray(liabilitiesData.student) ? liabilitiesData.student.length : 0,
+      mortgage: Array.isArray(liabilitiesData.mortgage) ? liabilitiesData.mortgage.length : 0,
+    },
+    mappedLiabilityByAccountId: liabilityByAccountId,
+    liabilityAccounts: liabilityAccounts.map((account) => {
+      const mapped = liabilityByAccountId[account.account_id] || {};
+      return {
+        accountId: account.account_id,
+        name: account.name,
+        type: account.type,
+        subtype: account.subtype,
+        mapped,
+      };
+    }),
+    rawLiabilities: liabilitiesData,
+  };
+}
+
 function buildFallbackHoldingForAccount(account) {
   const absoluteValue = Math.abs(Number(account?.balances?.current || 0));
   const baseSymbol = (account?.subtype || account?.type || 'account').toUpperCase().slice(0, 8);
@@ -73,31 +108,59 @@ async function fetchInvestmentsHoldings(access_token) {
 }
 
 async function fetchLiabilitiesData(access_token) {
-  try {
-    const liabilitiesResponse = await plaidClient.liabilitiesGet({ access_token });
-    return liabilitiesResponse.data?.liabilities || {};
-  } catch (error) {
-    const plaidErrorCode = getPlaidErrorCode(error);
-    const unsupportedErrors = new Set([
-      'INVALID_PRODUCT',
-      'PRODUCTS_NOT_SUPPORTED',
-      'NO_LIABILITY_ACCOUNTS',
-      'PRODUCT_NOT_READY',
-    ]);
+  const maxAttempts = 4;
+  const unsupportedErrors = new Set([
+    'INVALID_PRODUCT',
+    'PRODUCTS_NOT_SUPPORTED',
+    'NO_LIABILITY_ACCOUNTS',
+  ]);
 
-    if (unsupportedErrors.has(plaidErrorCode)) {
-      return {};
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const liabilitiesResponse = await plaidClient.liabilitiesGet({ access_token });
+      return liabilitiesResponse.data?.liabilities || {};
+    } catch (error) {
+      const plaidErrorCode = getPlaidErrorCode(error);
+      if (unsupportedErrors.has(plaidErrorCode)) {
+        return {};
+      }
+
+      const shouldRetry = plaidErrorCode === 'PRODUCT_NOT_READY';
+      if (!shouldRetry || attempt === maxAttempts) {
+        throw error;
+      }
+
+      await wait(attempt * 600);
     }
-
-    throw error;
   }
+
+  return {};
 }
 
 function buildLiabilityByAccountId(liabilities = {}) {
   const liabilityByAccountId = {};
+
+  const getEntryValue = (entry, ...keys) => {
+    for (const key of keys) {
+      if (!key) continue;
+      const value = entry?.[key];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+
+    return undefined;
+  };
+
   const readNumber = (...values) => {
     for (const value of values) {
-      const parsed = Number(value);
+      if (value === null || value === undefined) continue;
+
+      const normalizedValue = typeof value === 'string'
+        ? value.replace(/[$,%\s,]/g, '')
+        : value;
+
+      if (typeof normalizedValue === 'string' && normalizedValue.trim() === '') continue;
+
+      const parsed = Number(normalizedValue);
       if (Number.isFinite(parsed)) return parsed;
     }
 
@@ -106,6 +169,10 @@ function buildLiabilityByAccountId(liabilities = {}) {
 
   const readDate = (...values) => {
     for (const value of values) {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().split('T')[0];
+      }
+
       if (typeof value !== 'string') continue;
       const trimmed = value.trim();
       if (!trimmed) continue;
@@ -131,73 +198,92 @@ function buildLiabilityByAccountId(liabilities = {}) {
   };
 
   (liabilities.credit || []).forEach((entry) => {
-    const aprs = Array.isArray(entry?.aprs) ? entry.aprs : [];
-    const purchaseApr = aprs.find((aprEntry) => aprEntry?.apr_type === 'purchase_apr');
+    const aprs = Array.isArray(getEntryValue(entry, 'aprs')) ? getEntryValue(entry, 'aprs') : [];
+    const purchaseApr = aprs.find((aprEntry) => String(getEntryValue(aprEntry, 'apr_type', 'aprType') || '').toLowerCase() === 'purchase_apr');
     const apr = readNumber(
-      purchaseApr?.apr_percentage,
-      aprs[0]?.apr_percentage,
-      entry?.interest_rate_percentage,
-      entry?.interest_rate?.percentage,
+      getEntryValue(purchaseApr, 'apr_percentage', 'aprPercentage'),
+      getEntryValue(aprs[0], 'apr_percentage', 'aprPercentage'),
+      getEntryValue(entry, 'interest_rate_percentage', 'interestRatePercentage'),
+      getEntryValue(getEntryValue(entry, 'interest_rate', 'interestRate') || {}, 'percentage'),
     );
-    const paymentAmount = readNumber(entry?.minimum_payment_amount, entry?.last_payment_amount);
+    const paymentAmount = readNumber(
+      getEntryValue(entry, 'minimum_payment_amount', 'minimumPaymentAmount'),
+      getEntryValue(entry, 'next_payment_amount', 'nextPaymentAmount'),
+      getEntryValue(entry, 'last_payment_amount', 'lastPaymentAmount'),
+    );
 
-    upsertLiabilityDetails(entry?.account_id, {
+    upsertLiabilityDetails(getEntryValue(entry, 'account_id', 'accountId'), {
       interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
-      nextPaymentDate: readDate(entry?.next_payment_due_date, entry?.next_payment_date),
+      nextPaymentDate: readDate(
+        getEntryValue(entry, 'next_payment_due_date', 'nextPaymentDueDate'),
+        getEntryValue(entry, 'next_payment_date', 'nextPaymentDate'),
+      ),
       paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
     });
   });
 
   (liabilities.student || []).forEach((entry) => {
-    const loans = Array.isArray(entry?.loans) && entry.loans.length ? entry.loans : [entry];
+    const loans = Array.isArray(getEntryValue(entry, 'loans')) && getEntryValue(entry, 'loans').length
+      ? getEntryValue(entry, 'loans')
+      : [entry];
 
     loans.forEach((loan) => {
       const apr = readNumber(
-        loan?.interest_rate_percentage,
-        loan?.interest_rate?.percentage,
-        entry?.interest_rate_percentage,
-        entry?.interest_rate?.percentage,
+        getEntryValue(loan, 'interest_rate_percentage', 'interestRatePercentage'),
+        getEntryValue(getEntryValue(loan, 'interest_rate', 'interestRate') || {}, 'percentage'),
+        getEntryValue(entry, 'interest_rate_percentage', 'interestRatePercentage'),
+        getEntryValue(getEntryValue(entry, 'interest_rate', 'interestRate') || {}, 'percentage'),
       );
       const paymentAmount = readNumber(
-        loan?.minimum_payment_amount,
-        loan?.next_payment_amount,
-        loan?.last_payment_amount,
-        entry?.minimum_payment_amount,
-        entry?.next_payment_amount,
-        entry?.last_payment_amount,
+        getEntryValue(loan, 'minimum_payment_amount', 'minimumPaymentAmount'),
+        getEntryValue(loan, 'next_payment_amount', 'nextPaymentAmount'),
+        getEntryValue(loan, 'last_payment_amount', 'lastPaymentAmount'),
+        getEntryValue(entry, 'minimum_payment_amount', 'minimumPaymentAmount'),
+        getEntryValue(entry, 'next_payment_amount', 'nextPaymentAmount'),
+        getEntryValue(entry, 'last_payment_amount', 'lastPaymentAmount'),
       );
 
-      upsertLiabilityDetails(loan?.account_id || entry?.account_id, {
-        interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
-        nextPaymentDate: readDate(
-          loan?.next_payment_due_date,
-          loan?.next_payment_date,
-          entry?.next_payment_due_date,
-          entry?.next_payment_date,
-        ),
-        paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
-      });
+      upsertLiabilityDetails(
+        getEntryValue(loan, 'account_id', 'accountId') || getEntryValue(entry, 'account_id', 'accountId'),
+        {
+          interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
+          nextPaymentDate: readDate(
+            getEntryValue(loan, 'next_payment_due_date', 'nextPaymentDueDate'),
+            getEntryValue(loan, 'next_payment_date', 'nextPaymentDate'),
+            getEntryValue(entry, 'next_payment_due_date', 'nextPaymentDueDate'),
+            getEntryValue(entry, 'next_payment_date', 'nextPaymentDate'),
+          ),
+          paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
+        },
+      );
     });
   });
 
   (liabilities.mortgage || []).forEach((entry) => {
-    const apr = readNumber(entry?.interest_rate?.percentage, entry?.interest_rate_percentage);
+    const apr = readNumber(
+      getEntryValue(getEntryValue(entry, 'interest_rate', 'interestRate') || {}, 'percentage'),
+      getEntryValue(entry, 'interest_rate_percentage', 'interestRatePercentage'),
+    );
     const paymentAmount = readNumber(
-      entry?.next_monthly_payment,
-      entry?.next_payment_amount,
-      entry?.minimum_payment_amount,
-      entry?.last_payment_amount,
+      getEntryValue(entry, 'next_monthly_payment', 'nextMonthlyPayment'),
+      getEntryValue(entry, 'next_payment_amount', 'nextPaymentAmount'),
+      getEntryValue(entry, 'minimum_payment_amount', 'minimumPaymentAmount'),
+      getEntryValue(entry, 'last_payment_amount', 'lastPaymentAmount'),
     );
 
-    upsertLiabilityDetails(entry?.account_id, {
+    upsertLiabilityDetails(getEntryValue(entry, 'account_id', 'accountId'), {
       interestRate: Number.isFinite(apr) ? Number(apr.toFixed(2)) : undefined,
-      nextPaymentDate: readDate(entry?.next_payment_due_date, entry?.next_payment_date),
+      nextPaymentDate: readDate(
+        getEntryValue(entry, 'next_payment_due_date', 'nextPaymentDueDate'),
+        getEntryValue(entry, 'next_payment_date', 'nextPaymentDate'),
+      ),
       paymentAmount: Number.isFinite(paymentAmount) ? Number(paymentAmount.toFixed(2)) : undefined,
     });
   });
 
   return liabilityByAccountId;
 }
+
 
 
 async function fetchTransactionsWithRetry(access_token, start_date, end_date) {
@@ -239,7 +325,9 @@ module.exports = async (req, res) => {
   try {
     assertPlaidConfig();
 
-    const { access_token } = parseJsonBody(req);
+    const requestBody = parseJsonBody(req);
+    const access_token = requestBody?.access_token;
+    const debugLiabilities = toBooleanFlag(requestBody?.debugLiabilities) || toBooleanFlag(req?.query?.debugLiabilities);
 
     if (!access_token) {
       return res.status(400).json({ error: 'access_token is required' });
@@ -292,7 +380,7 @@ module.exports = async (req, res) => {
 
     const transactions = (await categorizeTransactions(rawTransactions)).map(({ merchant_name, personal_finance_category, ...tx }) => tx);
 
-    return res.status(200).json({
+    const responsePayload = {
       transactions,
       accounts: accounts.map((acc) => {
         const accountHoldings = holdingsByAccountId[acc.account_id] || [];
@@ -329,7 +417,13 @@ module.exports = async (req, res) => {
           ...buildLiabilityDetails(acc, liabilityByAccountId),
         };
       }),
-    });
+    };
+
+    if (debugLiabilities) {
+      responsePayload.liabilitiesDebug = buildLiabilitiesDebugPayload(liabilitiesData, liabilityByAccountId, accounts);
+    }
+
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('Error fetching transactions:', error);
     const statusCode = error.message === 'Invalid JSON body' ? 400 : 500;
