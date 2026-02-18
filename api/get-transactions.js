@@ -398,10 +398,17 @@ module.exports = async (req, res) => {
     }, {});
 
     const sourceTransactions = response?.data?.transactions || [];
-    const rawTransactions = sourceTransactions.map((tx) => {
+    const postedPendingReferences = new Set(
+      sourceTransactions
+        .filter((tx) => !tx.pending && tx.pending_transaction_id)
+        .map((tx) => tx.pending_transaction_id),
+    );
+    const filteredTransactions = sourceTransactions.filter((tx) => !(tx.pending && postedPendingReferences.has(tx.transaction_id)));
+
+    const rawTransactions = filteredTransactions.map((tx) => {
       const account = accounts.find((acc) => acc.account_id === tx.account_id);
       const accountType = account?.type === 'credit' ? 'credit' : 'checking';
-      const normalizedAmount = accountType === 'credit' ? -Math.abs(tx.amount) : -tx.amount;
+      const normalizedAmount = -tx.amount;
 
       return {
         id: tx.transaction_id,
