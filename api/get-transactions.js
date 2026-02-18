@@ -26,31 +26,26 @@ function buildFallbackHoldingForAccount(account) {
 }
 
 function buildLiabilityDetails(account, liabilityByAccountId = {}) {
-  const metric = `${account?.account_id || ''}${account?.subtype || ''}`.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
   const isLiability = ['credit', 'loan', 'liability'].includes((account?.type || '').toLowerCase());
   if (!isLiability) return {};
 
   const plaidLiability = liabilityByAccountId[account?.account_id] || {};
-  const fallbackInterestRate = Number((8 + ((metric % 120) / 10)).toFixed(2));
   const plaidInterestRate = Number(plaidLiability.interestRate);
-  const interestRate = Number.isFinite(plaidInterestRate) ? plaidInterestRate : fallbackInterestRate;
-  const termMonths = 12 + ((metric % 84));
+  const interestRate = Number.isFinite(plaidInterestRate) ? Number(plaidInterestRate.toFixed(2)) : null;
+  const termMonths = null;
 
-  const now = new Date();
-  const fallbackNextPaymentDate = new Date(now.getFullYear(), now.getMonth() + 1, Math.max(1, (metric % 28) + 1));
   const parsedNextPaymentDate = plaidLiability.nextPaymentDate ? new Date(plaidLiability.nextPaymentDate) : null;
   const nextPaymentDate = parsedNextPaymentDate && !Number.isNaN(parsedNextPaymentDate.getTime())
     ? parsedNextPaymentDate
-    : fallbackNextPaymentDate;
+    : null;
 
   const plaidPaymentAmount = Number(plaidLiability.paymentAmount);
-  const fallbackPaymentAmount = Number((Math.max(25, Math.abs(Number(account?.balances?.current || 0)) * 0.035)).toFixed(2));
-  const paymentAmount = Number.isFinite(plaidPaymentAmount) ? Number(plaidPaymentAmount.toFixed(2)) : fallbackPaymentAmount;
+  const paymentAmount = Number.isFinite(plaidPaymentAmount) ? Number(plaidPaymentAmount.toFixed(2)) : null;
 
   return {
     interestRate,
     termMonths,
-    nextPaymentDate: nextPaymentDate.toISOString().split('T')[0],
+    nextPaymentDate: nextPaymentDate ? nextPaymentDate.toISOString().split('T')[0] : null,
     paymentAmount,
   };
 }
