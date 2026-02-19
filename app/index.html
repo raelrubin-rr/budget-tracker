@@ -4206,20 +4206,29 @@
         }
 
         function applyAccountOverride(account, override = {}) {
-            const isRrProfile = isRrScopedProfile();
             const accountName = String(account?.name || '').toLowerCase();
-            const isRrOnlyFirstTechLiability = accountName.includes('first tech') && accountName.includes('student');
-            const allowLiabilityFieldOverrides = isRrProfile || !isRrOnlyFirstTechLiability;
-            const interestRateOverride = allowLiabilityFieldOverrides ? parseOptionalNumber(override.interestRate) : undefined;
-            const paymentAmountOverride = allowLiabilityFieldOverrides ? parseOptionalNumber(override.paymentAmount) : undefined;
-            const nextPaymentDateOverride = allowLiabilityFieldOverrides ? parseOptionalIsoDate(override.nextPaymentDate) : undefined;
+            const isFirstTechStudentLoan = accountName.includes('first tech') && accountName.includes('student');
+
+            const interestRateOverride = parseOptionalNumber(override.interestRate);
+            const paymentAmountOverride = parseOptionalNumber(override.paymentAmount);
+            const nextPaymentDateOverride = parseOptionalIsoDate(override.nextPaymentDate);
+
+            const fallbackInterestRate = isFirstTechStudentLoan ? 2.84 : undefined;
+            const fallbackPaymentAmount = isFirstTechStudentLoan ? 550 : undefined;
+            const fallbackNextPaymentDate = isFirstTechStudentLoan ? '2025-03-21' : undefined;
 
             return {
                 ...account,
                 name: override.name || account.name,
-                interestRate: interestRateOverride !== undefined ? interestRateOverride : account.interestRate,
-                paymentAmount: paymentAmountOverride !== undefined ? paymentAmountOverride : account.paymentAmount,
-                nextPaymentDate: nextPaymentDateOverride !== undefined ? nextPaymentDateOverride : account.nextPaymentDate,
+                interestRate: interestRateOverride !== undefined
+                    ? interestRateOverride
+                    : (account.interestRate ?? fallbackInterestRate),
+                paymentAmount: paymentAmountOverride !== undefined
+                    ? paymentAmountOverride
+                    : (account.paymentAmount ?? fallbackPaymentAmount),
+                nextPaymentDate: nextPaymentDateOverride !== undefined
+                    ? nextPaymentDateOverride
+                    : (account.nextPaymentDate || fallbackNextPaymentDate),
             };
         }
 

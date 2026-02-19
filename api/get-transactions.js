@@ -11,6 +11,33 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function parseNumericValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const isAccountingNegative = /^\(.*\)$/.test(trimmed);
+    const normalized = trimmed
+      .replace(/[()]/g, '')
+      .replace(/[$,%\s,]/g, '');
+
+    if (!normalized) return null;
+
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return null;
+    return isAccountingNegative ? -Math.abs(parsed) : parsed;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 
 function toBooleanFlag(value) {
   if (value === true || value === 1) return true;
@@ -63,11 +90,7 @@ function buildFallbackHoldingForAccount(account) {
 
 function readPerformancePercent(...values) {
   for (const value of values) {
-    if (value === null || value === undefined || value === '') continue;
-    const normalizedValue = typeof value === 'string'
-      ? value.replace(/[,%\s]/g, '')
-      : value;
-    const parsed = Number(normalizedValue);
+    const parsed = parseNumericValue(value);
     if (Number.isFinite(parsed)) return Number(parsed.toFixed(1));
   }
 
@@ -189,15 +212,7 @@ function buildLiabilityByAccountId(liabilities = {}) {
 
   const readNumber = (...values) => {
     for (const value of values) {
-      if (value === null || value === undefined) continue;
-
-      const normalizedValue = typeof value === 'string'
-        ? value.replace(/[$,%\s,]/g, '')
-        : value;
-
-      if (typeof normalizedValue === 'string' && normalizedValue.trim() === '') continue;
-
-      const parsed = Number(normalizedValue);
+      const parsed = parseNumericValue(value);
       if (Number.isFinite(parsed)) return parsed;
     }
 
