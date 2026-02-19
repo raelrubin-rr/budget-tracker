@@ -968,6 +968,7 @@
 
         .setting-list {
             margin-top: 14px;
+            margin-bottom: 14px;
             display: grid;
             gap: 8px;
         }
@@ -999,14 +1000,14 @@
         }
 
         .sidebar .btn {
-            background: var(--text-primary);
+            background: #f5f8ff;
             color: var(--bg-primary);
-            border-color: var(--text-primary);
+            border-color: #f5f8ff;
         }
 
         .sidebar .btn:hover {
-            background: var(--text-secondary);
-            border-color: var(--text-secondary);
+            background: #d7dfed;
+            border-color: #d7dfed;
         }
 
         .sidebar-overlay {
@@ -2390,6 +2391,7 @@
         const ACCOUNT_OVERRIDES_KEY = 'budget_account_overrides_v1';
         const TRANSACTION_OVERRIDES_KEY = 'budget_transaction_overrides_v1';
         const PROFILE_ID_KEY = 'budget_profile_id_v1';
+        const LOCAL_STATE_SNAPSHOT_KEY = 'budget_local_state_snapshot_v1';
         const MONTHLY_EXPENSE_HISTORY_KEY = 'budget_monthly_expense_history_v1';
         const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
@@ -2397,6 +2399,7 @@
         let isHydratingRemoteState = false;
         let remoteStateReady = false;
         let remoteStateLoadFailed = false;
+        let localSnapshotUpdatedAt = null;
 
         const DEFAULT_SEIA_401K = {
             id: 'custom::seia-401k',
@@ -2410,6 +2413,7 @@
             baselinePerformanceDate: '2026-02-17',
             contributionAmount: 365,
             contributionFrequencyDays: 14,
+            contributionStartDate: '2026-01-09',
             nextContributionDate: '2026-02-17',
             proxySymbol: 'vt.us',
         };
@@ -2492,6 +2496,50 @@
 
         function persistTransactionOverrides(overrides) {
             localStorage.setItem(TRANSACTION_OVERRIDES_KEY, JSON.stringify(overrides || {}));
+        }
+
+        function loadLocalStateSnapshot() {
+            try {
+                const raw = localStorage.getItem(LOCAL_STATE_SNAPSHOT_KEY);
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' ? parsed : null;
+            } catch (error) {
+                console.warn('Unable to parse local state snapshot, resetting.', error);
+                return null;
+            }
+        }
+
+        function persistLocalStateSnapshot() {
+            const nowIso = new Date().toISOString();
+            localSnapshotUpdatedAt = nowIso;
+            const snapshot = {
+                income: Number(state.income || 0),
+                savings: Number(state.savings || 0),
+                budgetStartDay: Number(state.budgetStartDay || 4),
+                fixedExpenses: Array.isArray(state.fixedExpenses) ? state.fixedExpenses : [],
+                accountVisibility: state.accountVisibility && typeof state.accountVisibility === 'object' ? state.accountVisibility : {},
+                customAssets: Array.isArray(state.customAssets) ? state.customAssets : [],
+                snapshotUpdatedAt: nowIso,
+            };
+            localStorage.setItem(LOCAL_STATE_SNAPSHOT_KEY, JSON.stringify(snapshot));
+        }
+
+        function applyStateSnapshot(snapshot) {
+            if (!snapshot || typeof snapshot !== 'object') return;
+            if (Number.isFinite(Number(snapshot.income))) state.income = Number(snapshot.income);
+            if (Number.isFinite(Number(snapshot.savings))) state.savings = Number(snapshot.savings);
+            if (Number.isFinite(Number(snapshot.budgetStartDay))) state.budgetStartDay = Number(snapshot.budgetStartDay);
+            if (Array.isArray(snapshot.fixedExpenses)) state.fixedExpenses = snapshot.fixedExpenses;
+            if (snapshot.accountVisibility && typeof snapshot.accountVisibility === 'object') state.accountVisibility = snapshot.accountVisibility;
+            if (Array.isArray(snapshot.customAssets)) state.customAssets = snapshot.customAssets;
+            const snapshotTime = Date.parse(snapshot.snapshotUpdatedAt || '');
+            if (Number.isFinite(snapshotTime)) localSnapshotUpdatedAt = snapshot.snapshotUpdatedAt;
+        }
+
+        function getSnapshotTimestampValue(value) {
+            const parsed = Date.parse(value || '');
+            return Number.isFinite(parsed) ? parsed : 0;
         }
 
         function getAccountVisibility(accountId) {
@@ -2778,6 +2826,7 @@
                     baselinePerformanceDate: DEFAULT_SEIA_401K.baselinePerformanceDate,
                     contributionAmount: DEFAULT_SEIA_401K.contributionAmount,
                     contributionFrequencyDays: DEFAULT_SEIA_401K.contributionFrequencyDays,
+                    contributionStartDate: DEFAULT_SEIA_401K.contributionStartDate,
                     nextContributionDate: DEFAULT_SEIA_401K.nextContributionDate,
                     proxySymbol: DEFAULT_SEIA_401K.proxySymbol,
                 };
@@ -2840,8 +2889,9 @@
 
         function buildCustomAssetCashflowSummary(customAsset, todayIso) {
             const contributionAmount = Number(customAsset.contributionAmount || 0);
+            const contributionAnchorDate = customAsset.nextContributionDate;
             const contributionDates = buildRecurringEventDates(
-                customAsset.nextContributionDate,
+                contributionAnchorDate,
                 customAsset.contributionFrequencyDays || 14,
                 todayIso,
             );
@@ -2877,6 +2927,18 @@
             });
 
             const totalContributions = contributionDates.length * contributionAmount;
+            const currentYear = new Date().getFullYear();
+            const ytdContributionDates = buildRecurringEventDates(
+                customAsset.contributionStartDate || customAsset.nextContributionDate,
+                customAsset.contributionFrequencyDays || 14,
+                todayIso,
+            );
+            const ytdContributions = ytdContributionDates
+                .filter((dateIso) => {
+                    const date = parseIsoDateToUtc(dateIso);
+                    return date && date.getUTCFullYear() === currentYear;
+                })
+                .length * contributionAmount;
             const totalWithdrawals = (withdrawalDates.length * recurringWithdrawalAmount)
                 + postedExplicitWithdrawals.reduce((sum, entry) => sum + entry.amount, 0);
             const nextRecurringWithdrawalDate = getNextRecurringEventDate(
@@ -2892,6 +2954,7 @@
                 contributionDates,
                 cashflowMap,
                 totalContributions,
+                ytdContributions,
                 totalWithdrawals,
                 totalWithdrawalEvents: withdrawalDates.length + postedExplicitWithdrawals.length,
                 nextRecurringWithdrawalDate,
@@ -3118,6 +3181,7 @@
                 contributionDates,
                 cashflowMap,
                 totalContributions,
+                ytdContributions,
                 totalWithdrawals,
                 totalWithdrawalEvents,
                 nextRecurringWithdrawalDate,
@@ -3140,14 +3204,14 @@
             const baselineAnchorDate = customAsset.baselinePerformanceDate || customAsset.startDate;
             const proxySinceBaselinePct = calculateProxyReturnPercent(history, baselineAnchorDate, todayIso) ?? proxySinceStartPct;
             const anchoredPerformancePct = calculateAnchoredPerformancePercent(customAsset, proxySinceBaselinePct);
-            const irrPerformancePct = calculateMoneyWeightedReturnPercentForWindow(
+            const twrPerformancePct = calculateTimeWeightedReturnForWindow(
+                history,
                 customAsset.startDate,
                 todayIso,
                 Number(customAsset.startBalance || 0),
-                computedBalance,
                 cashflowMap,
             );
-            const performancePct = Number.isFinite(irrPerformancePct) ? irrPerformancePct : anchoredPerformancePct;
+            const performancePct = Number.isFinite(twrPerformancePct) ? twrPerformancePct : anchoredPerformancePct;
             const yearStartIso = `${new Date().getFullYear()}-01-01`;
             let ytdPerformancePct = performancePct;
             if (yearStartIso >= customAsset.startDate) {
@@ -3157,23 +3221,21 @@
                     dayBeforeYearStartDate.setUTCDate(dayBeforeYearStartDate.getUTCDate() - 1);
                     const seedEndIso = formatDateToIso(dayBeforeYearStartDate);
                     const seed = calculateDailyEstimatedPortfolio(history, customAsset, cashflowMap, seedEndIso);
-                    const ytdIrrPct = calculateMoneyWeightedReturnPercentForWindow(yearStartIso, todayIso, seed.endingBalance, computedBalance, cashflowMap);
                     const ytdTwr = calculateTimeWeightedReturnForWindow(history, yearStartIso, todayIso, seed.endingBalance, cashflowMap);
-                    if (Number.isFinite(ytdIrrPct)) ytdPerformancePct = ytdIrrPct;
-                    else if (Number.isFinite(ytdTwr)) ytdPerformancePct = ytdTwr;
+                    if (Number.isFinite(ytdTwr)) ytdPerformancePct = ytdTwr;
                 }
             }
             const baselinePct = Number(customAsset.baselinePerformancePct);
             if (yearStartIso < customAsset.startDate && Number.isFinite(baselinePct)) {
-                const postBaselineIrrPct = calculateMoneyWeightedReturnPercentForWindow(
+                const postBaselineTwrPct = calculateTimeWeightedReturnForWindow(
+                    history,
                     baselineAnchorDate,
                     todayIso,
                     Number(customAsset.startBalance || 0),
-                    computedBalance,
                     cashflowMap,
                 );
-                if (Number.isFinite(postBaselineIrrPct)) {
-                    ytdPerformancePct = Number(((((1 + (baselinePct / 100)) * (1 + (postBaselineIrrPct / 100))) - 1) * 100).toFixed(1));
+                if (Number.isFinite(postBaselineTwrPct)) {
+                    ytdPerformancePct = Number(((((1 + (baselinePct / 100)) * (1 + (postBaselineTwrPct / 100))) - 1) * 100).toFixed(1));
                 } else {
                     ytdPerformancePct = baselinePct;
                 }
@@ -3195,9 +3257,11 @@
                     startDate: customAsset.startDate,
                     nextContributionDate: customAsset.nextContributionDate,
                     contributionAmount,
+                    contributionStartDate: customAsset.contributionStartDate || customAsset.nextContributionDate,
                     contributionFrequencyDays: customAsset.contributionFrequencyDays || 14,
                     totalContributionsIncluded: contributionDates.length,
                     totalContributed: Number(totalContributions.toFixed(2)),
+                    ytdContributed: Number(ytdContributions.toFixed(2)),
                     totalWithdrawn: Number(totalWithdrawals.toFixed(2)),
                     netContributed: Number(netContributed.toFixed(2)),
                     startingBalance: Number(customAsset.startBalance || 0),
@@ -3208,6 +3272,7 @@
                     proxyReturnSinceStartPct: Number.isFinite(proxySinceStartPct) ? Number(proxySinceStartPct.toFixed(1)) : null,
                     livePerformancePct: Number.isFinite(latestDailyProxyPct) ? latestDailyProxyPct : null,
                     performancePct,
+                    ytdPerformancePct,
                     currentValueDate: customAsset.currentValueDate || null,
                     hasManualCurrentValue,
                     lastUpdatedStatus: hasProxyHistory ? 'complete' : 'incomplete',
@@ -3370,8 +3435,14 @@
 
             const cycleStartUtc = new Date(Date.UTC(cycleRange.start.getFullYear(), cycleRange.start.getMonth(), cycleRange.start.getDate()));
             const cycleEndUtc = new Date(Date.UTC(cycleRange.end.getFullYear(), cycleRange.end.getMonth(), cycleRange.end.getDate()));
+            const pendingWindowEnd = getPendingTransactionWindowEndDate(cycleRange.end);
+            const pendingWindowEndUtc = new Date(Date.UTC(pendingWindowEnd.getFullYear(), pendingWindowEnd.getMonth(), pendingWindowEnd.getDate()));
 
-            return txDate >= cycleStartUtc && txDate < cycleEndUtc;
+            if (tx?.pending) {
+                return txDate >= cycleStartUtc && txDate <= pendingWindowEndUtc;
+            }
+
+            return txDate >= cycleStartUtc && txDate <= cycleEndUtc;
         }
 
         function getCycleFromOffset(offset) {
@@ -3676,10 +3747,15 @@
             return tx?.account === 'credit' && Number(tx?.amount) > 0;
         }
 
+        function getPendingTransactionWindowEndDate(cycleEndDate) {
+            const pendingWindowEnd = new Date(cycleEndDate);
+            pendingWindowEnd.setDate(pendingWindowEnd.getDate() - 1);
+            return pendingWindowEnd;
+        }
+
         function getCurrentCycleTransactionWindow() {
             const cycle = getCurrentCycleRange();
             const endInclusive = new Date(cycle.end);
-            endInclusive.setDate(endInclusive.getDate());
             return {
                 start_date: cycle.start.toISOString().split('T')[0],
                 end_date: endInclusive.toISOString().split('T')[0],
@@ -3788,6 +3864,7 @@
                 accountOverrides: loadAccountOverrides(),
                 transactionOverrides: loadTransactionOverrides(),
                 customAssets: Array.isArray(state.customAssets) ? state.customAssets : [],
+                snapshotUpdatedAt: localSnapshotUpdatedAt,
                 plaidItems: typeof plaidItems === 'undefined' ? [] : normalizePlaidItems(plaidItems),
             };
         }
@@ -3855,17 +3932,23 @@
                     if (plaidItems.length) persistPlaidItems(plaidItems);
                 }
 
-                if (Number.isFinite(Number(remoteState.income))) state.income = Number(remoteState.income);
-                if (Number.isFinite(Number(remoteState.savings))) state.savings = Number(remoteState.savings);
-                if (Number.isFinite(Number(remoteState.budgetStartDay))) state.budgetStartDay = Number(remoteState.budgetStartDay);
-                if (Array.isArray(remoteState.fixedExpenses)) state.fixedExpenses = remoteState.fixedExpenses;
+                const localSnapshotTs = getSnapshotTimestampValue(localSnapshotUpdatedAt);
+                const remoteSnapshotTs = getSnapshotTimestampValue(remoteState.snapshotUpdatedAt);
+                const shouldApplyRemoteSettings = remoteSnapshotTs >= localSnapshotTs;
+
+                if (shouldApplyRemoteSettings && Number.isFinite(Number(remoteState.income))) state.income = Number(remoteState.income);
+                if (shouldApplyRemoteSettings && Number.isFinite(Number(remoteState.savings))) state.savings = Number(remoteState.savings);
+                if (shouldApplyRemoteSettings && Number.isFinite(Number(remoteState.budgetStartDay))) state.budgetStartDay = Number(remoteState.budgetStartDay);
+                if (shouldApplyRemoteSettings && Array.isArray(remoteState.fixedExpenses)) state.fixedExpenses = remoteState.fixedExpenses;
                 if (Array.isArray(remoteState.billingHistory)) state.billingHistory = remoteState.billingHistory;
                 if (Array.isArray(remoteState.monthlyExpenseHistory)) state.monthlyExpenseHistory = remoteState.monthlyExpenseHistory;
-                if (remoteState.accountVisibility && typeof remoteState.accountVisibility === 'object') state.accountVisibility = remoteState.accountVisibility;
+                if (shouldApplyRemoteSettings && remoteState.accountVisibility && typeof remoteState.accountVisibility === 'object') state.accountVisibility = remoteState.accountVisibility;
                 if (Array.isArray(remoteState.accounts) && remoteState.accounts.length) state.accounts = remoteState.accounts;
                 if (Array.isArray(remoteState.transactions) && remoteState.transactions.length) state.transactions = remoteState.transactions;
                 if (remoteState.lastAccountsUpdatedAt) state.lastAccountsUpdatedAt = remoteState.lastAccountsUpdatedAt;
-                if (Array.isArray(remoteState.customAssets)) state.customAssets = remoteState.customAssets;
+                if (shouldApplyRemoteSettings && Array.isArray(remoteState.customAssets)) state.customAssets = remoteState.customAssets;
+                if (shouldApplyRemoteSettings && remoteSnapshotTs > 0) localSnapshotUpdatedAt = remoteState.snapshotUpdatedAt;
+                persistLocalStateSnapshot();
 
                 if (remoteState.accountOverrides && typeof remoteState.accountOverrides === 'object') {
                     persistAccountOverrides(remoteState.accountOverrides);
@@ -3951,6 +4034,7 @@
             
             updateTransactions();
             renderAccountsWidget();
+            persistLocalStateSnapshot();
             queueRemoteStateSave();
         }
 
@@ -3996,6 +4080,7 @@
 
         function computePerformancePct(account, kind) {
             if (kind !== 'asset') return null;
+            if (account?.customAsset && Number.isFinite(Number(account?.estimationMeta?.ytdPerformancePct))) return Number(account.estimationMeta.ytdPerformancePct);
             if (account?.customAsset && Number.isFinite(Number(account?.estimationMeta?.performancePct))) return Number(account.estimationMeta.performancePct);
             const value = Number(account.balance || 0);
             if (Math.abs(value) === 0) return null;
@@ -4180,7 +4265,7 @@
                     const holdYtd = Number.isFinite(holdYtdRaw) ? holdYtdRaw : null;
                     const liveClass = holdLive === null ? 'neutral' : (holdLive < 0 ? 'negative' : 'positive');
                     const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
-                    const contributionValue = Number(account?.estimationMeta?.netContributed);
+                    const contributionValue = Number(account?.estimationMeta?.ytdContributed);
                     const contributionDisplay = Number.isFinite(contributionValue) ? formatCurrency(contributionValue) : '--';
                     const holdingLabel = h.symbol || h.name || '--';
                     return `<tr class="holding-main-row">
@@ -4328,16 +4413,16 @@
         }
 
         function formatTransactionDate(dateString) {
-            const date = new Date(dateString);
-            if (Number.isNaN(date.getTime())) return 'Date unavailable';
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const date = parseIsoDateToUtc(dateString);
+            if (!date || Number.isNaN(date.getTime())) return 'Date unavailable';
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
         }
 
 
         function sortTransactionsForDisplay(transactions = []) {
             return [...transactions].sort((a, b) => {
                 if (Boolean(a.pending) !== Boolean(b.pending)) return a.pending ? -1 : 1;
-                const dateDelta = new Date(b.date) - new Date(a.date);
+                const dateDelta = (parseIsoDateToUtc(b.date)?.getTime() || 0) - (parseIsoDateToUtc(a.date)?.getTime() || 0);
                 if (dateDelta !== 0) return dateDelta;
                 return String(a.name || '').localeCompare(String(b.name || ''));
             });
@@ -4994,6 +5079,7 @@
             state.billingHistory = loadBillingHistory();
             state.monthlyExpenseHistory = loadMonthlyExpenseHistory();
             state.accountVisibility = loadAccountVisibility();
+            applyStateSnapshot(loadLocalStateSnapshot());
 
             await loadRemoteState();
 
@@ -5010,6 +5096,10 @@
             }
         }
         attachCurrencyInputFormatting();
+        window.addEventListener('beforeunload', () => {
+            persistLocalStateSnapshot();
+            if (remoteStateReady) persistRemoteState();
+        });
         checkConnection();
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
