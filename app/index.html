@@ -2282,7 +2282,9 @@
             subtype: 'retirement',
             custodian: 'ADP',
             startBalance: 21068.89,
-            startDate: '2025-02-17',
+            startDate: '2026-02-17',
+            baselinePerformancePct: 3.71,
+            baselinePerformanceDate: '2026-02-17',
             contributionAmount: 365,
             contributionFrequencyDays: 14,
             nextContributionDate: '2026-02-20',
@@ -2633,6 +2635,8 @@
                     custodian: DEFAULT_SEIA_401K.custodian,
                     startBalance: DEFAULT_SEIA_401K.startBalance,
                     startDate: DEFAULT_SEIA_401K.startDate,
+                    baselinePerformancePct: DEFAULT_SEIA_401K.baselinePerformancePct,
+                    baselinePerformanceDate: DEFAULT_SEIA_401K.baselinePerformanceDate,
                     contributionAmount: DEFAULT_SEIA_401K.contributionAmount,
                     contributionFrequencyDays: DEFAULT_SEIA_401K.contributionFrequencyDays,
                     nextContributionDate: DEFAULT_SEIA_401K.nextContributionDate,
@@ -2757,7 +2761,7 @@
             };
         }
 
-        function calculateDailyCompoundedBalance(history, customAsset, cashflowMap, todayIso) {
+        function calculateDailyEstimatedPortfolio(history, customAsset, cashflowMap, todayIso) {
             const sortedHistory = Array.isArray(history)
                 ? history
                     .filter((entry) => entry?.date && entry.date <= todayIso && Number.isFinite(Number(entry.close)))
@@ -2765,27 +2769,66 @@
                     .sort((a, b) => a.date.localeCompare(b.date))
                 : [];
 
-            const startBalance = Number(customAsset.startBalance || 0);
             const startDate = customAsset.startDate;
-            let estimatedBalance = startBalance + (cashflowMap[startDate] || 0);
+            const startDateObj = parseIsoDateToUtc(startDate);
+            const endDateObj = parseIsoDateToUtc(todayIso);
 
-            if (!sortedHistory.length) return estimatedBalance;
-
-            let previousClose = getCloseOnOrBefore(sortedHistory, startDate);
-            for (const bar of sortedHistory) {
-                if (bar.date <= startDate) {
-                    previousClose = bar.close;
-                    continue;
-                }
-
-                if (Number.isFinite(previousClose) && previousClose > 0) {
-                    estimatedBalance *= (bar.close / previousClose);
-                }
-                estimatedBalance += (cashflowMap[bar.date] || 0);
-                previousClose = bar.close;
+            if (!startDateObj || !endDateObj || startDateObj > endDateObj) {
+                return {
+                    endingBalance: Number(customAsset.startBalance || 0),
+                    twrPct: 0,
+                };
             }
 
-            return estimatedBalance;
+            const startBalance = Number(customAsset.startBalance || 0);
+            let estimatedBalance = startBalance + (cashflowMap[startDate] || 0);
+            if (!sortedHistory.length) {
+                return {
+                    endingBalance: estimatedBalance,
+                    twrPct: 0,
+                };
+            }
+
+            const closeByDate = new Map(sortedHistory.map((entry) => [entry.date, entry.close]));
+            let previousClose = getCloseOnOrBefore(sortedHistory, startDate);
+            let twrFactor = 1;
+
+            const cursor = new Date(startDateObj);
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+
+            while (cursor <= endDateObj) {
+                const dateIso = formatDateToIso(cursor);
+                const openingBalance = estimatedBalance;
+                const barClose = closeByDate.get(dateIso);
+
+                if (Number.isFinite(barClose) && Number.isFinite(previousClose) && previousClose > 0) {
+                    estimatedBalance *= (barClose / previousClose);
+                    previousClose = barClose;
+                } else if (Number.isFinite(barClose)) {
+                    previousClose = barClose;
+                }
+
+                const cashflow = cashflowMap[dateIso] || 0;
+                estimatedBalance += cashflow;
+
+                if (openingBalance > 0) {
+                    twrFactor *= (estimatedBalance - cashflow) / openingBalance;
+                }
+
+                cursor.setUTCDate(cursor.getUTCDate() + 1);
+            }
+
+            return {
+                endingBalance: estimatedBalance,
+                twrPct: Number(((twrFactor - 1) * 100).toFixed(2)),
+            };
+        }
+
+        function calculateAnchoredPerformancePercent(customAsset, proxyPctSinceBaseline) {
+            const baselinePct = Number(customAsset.baselinePerformancePct);
+            if (!Number.isFinite(proxyPctSinceBaseline)) return Number.isFinite(baselinePct) ? baselinePct : null;
+            if (!Number.isFinite(baselinePct)) return Number(proxyPctSinceBaseline.toFixed(1));
+            return Number(((((1 + (baselinePct / 100)) * (1 + (proxyPctSinceBaseline / 100))) - 1) * 100).toFixed(1));
         }
 
         function calculateProxyReturnPercent(history, fromIsoDate, toIsoDate) {
@@ -2794,6 +2837,21 @@
             const toClose = getCloseOnOrBefore(history, toIsoDate);
             if (!Number.isFinite(fromClose) || !Number.isFinite(toClose) || fromClose <= 0) return null;
             return Number((((toClose / fromClose) - 1) * 100).toFixed(1));
+        }
+
+        function calculateLatestDailyReturnPercent(history, asOfIsoDate) {
+            const sortedHistory = Array.isArray(history)
+                ? history
+                    .filter((entry) => entry?.date && entry.date <= asOfIsoDate && Number.isFinite(Number(entry.close)))
+                    .map((entry) => ({ date: entry.date, close: Number(entry.close) }))
+                    .sort((a, b) => a.date.localeCompare(b.date))
+                : [];
+
+            if (sortedHistory.length < 2) return null;
+            const latest = sortedHistory[sortedHistory.length - 1];
+            const previous = sortedHistory[sortedHistory.length - 2];
+            if (!Number.isFinite(previous.close) || previous.close <= 0) return null;
+            return Number((((latest.close / previous.close) - 1) * 100).toFixed(1));
         }
 
         async function buildEstimatedCustomAccount(customAsset) {
@@ -2812,7 +2870,7 @@
                 futureWithdrawalEvents,
             } = buildCustomAssetCashflowSummary(customAsset, todayIso);
 
-            const estimatedBalance = calculateDailyCompoundedBalance(history, customAsset, cashflowMap, todayIso);
+            const { endingBalance: estimatedBalance, twrPct } = calculateDailyEstimatedPortfolio(history, customAsset, cashflowMap, todayIso);
             const manualCurrentValue = Number(customAsset.currentValue);
             const hasManualCurrentValue = Number.isFinite(manualCurrentValue) && manualCurrentValue >= 0;
             const computedBalance = hasManualCurrentValue ? manualCurrentValue : estimatedBalance;
@@ -2822,10 +2880,12 @@
             const fallbackPerformancePct = performanceBase > 0
                 ? Number((((computedBalance - investedBasis) / performanceBase) * 100).toFixed(1))
                 : null;
-            const performancePct = calculateProxyReturnPercent(history, customAsset.startDate, todayIso) ?? fallbackPerformancePct;
-            const currentYearStartIso = `${new Date().getUTCFullYear()}-01-01`;
-            const ytdStartIso = customAsset.startDate > currentYearStartIso ? customAsset.startDate : currentYearStartIso;
-            const ytdPerformancePct = calculateProxyReturnPercent(history, ytdStartIso, todayIso) ?? performancePct;
+            const proxySinceStartPct = calculateProxyReturnPercent(history, customAsset.startDate, todayIso) ?? twrPct ?? fallbackPerformancePct;
+            const latestDailyProxyPct = calculateLatestDailyReturnPercent(history, todayIso);
+            const baselineAnchorDate = customAsset.baselinePerformanceDate || customAsset.startDate;
+            const proxySinceBaselinePct = calculateProxyReturnPercent(history, baselineAnchorDate, todayIso) ?? proxySinceStartPct;
+            const performancePct = calculateAnchoredPerformancePercent(customAsset, proxySinceBaselinePct);
+            const ytdPerformancePct = performancePct;
 
             return {
                 id: customAsset.id,
@@ -2850,6 +2910,8 @@
                     futureWithdrawalEvents,
                     nextRecurringWithdrawalDate,
                     totalWithdrawalEvents,
+                    proxyReturnSinceStartPct: Number.isFinite(proxySinceStartPct) ? Number(proxySinceStartPct.toFixed(1)) : null,
+                    livePerformancePct: Number.isFinite(latestDailyProxyPct) ? latestDailyProxyPct : null,
                     performancePct,
                     currentValueDate: customAsset.currentValueDate || null,
                     hasManualCurrentValue,
@@ -2859,7 +2921,7 @@
                     name: 'Custom Portfolio',
                     value: Number(computedBalance.toFixed(2)),
                     weight: 100,
-                    livePct: performancePct,
+                    livePct: latestDailyProxyPct,
                     ytdPct: ytdPerformancePct,
                 }],
             };
@@ -3004,6 +3066,19 @@
             return { start, end };
         }
 
+        function isTransactionInCycle(tx, cycleRange = getCurrentCycleRange()) {
+            const txDate = parseIsoDateToUtc(tx?.date);
+            if (!txDate || !cycleRange?.start || !cycleRange?.end) return false;
+
+            const cycleStartIso = formatDateToIso(cycleRange.start);
+            const cycleEndIso = formatDateToIso(cycleRange.end);
+            const cycleStartUtc = parseIsoDateToUtc(cycleStartIso);
+            const cycleEndUtc = parseIsoDateToUtc(cycleEndIso);
+            if (!cycleStartUtc || !cycleEndUtc) return false;
+
+            return txDate >= cycleStartUtc && txDate < cycleEndUtc;
+        }
+
         function getCycleFromOffset(offset) {
             const { start } = getCurrentCycleRange();
             const cycleStart = new Date(start.getFullYear(), start.getMonth() - offset, state.budgetStartDay || 4);
@@ -3018,10 +3093,7 @@
 
             const cycleSpending = state.transactions
                 .filter(t => t.amount < 0)
-                .filter(t => {
-                    const txDate = new Date(t.date);
-                    return txDate >= cycle.start && txDate < cycle.end;
-                })
+                .filter(t => isTransactionInCycle(t, cycle))
                 .reduce((sum, t) => sum + Math.abs(t.amount || 0) - (t.reimbursable || 0), 0);
 
             const additionalLeftover = state.income - totalFixed - plannedSavings - cycleSpending;
@@ -3488,7 +3560,10 @@
             setTextIfPresent('daysRemaining', `${getBudgetPeriod()} • ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`);
             
             const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
-            const budgetTransactions = state.transactions.filter(t => (Number(t.amount) < 0 && (t.account !== 'checking' || t.includeInBudget)) || isCreditRefund(t));
+            const currentCycle = getCurrentCycleRange();
+            const budgetTransactions = state.transactions
+                .filter((t) => isTransactionInCycle(t, currentCycle))
+                .filter(t => (Number(t.amount) < 0 && (t.account !== 'checking' || t.includeInBudget)) || isCreditRefund(t));
             const postedSpent = Math.round(budgetTransactions
                 .filter(t => !t.pending)
                 .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0));
@@ -3841,9 +3916,11 @@
 
         function updateTransactions() {
             state.transactions = state.transactions.map(normalizeTransactionCategory);
-            const checkingTx = state.transactions.filter(t => t.account === 'checking');
-            const creditTx = state.transactions.filter(t => t.account === 'credit');
-            const recurringNames = detectRecurring(state.transactions);
+            const currentCycle = getCurrentCycleRange();
+            const cycleTransactions = state.transactions.filter((t) => isTransactionInCycle(t, currentCycle));
+            const checkingTx = cycleTransactions.filter(t => t.account === 'checking');
+            const creditTx = cycleTransactions.filter(t => t.account === 'credit');
+            const recurringNames = detectRecurring(cycleTransactions);
             updateTransactionList('checking', checkingTx, recurringNames);
             updateTransactionList('credit', creditTx, recurringNames);
         }
@@ -3966,7 +4043,10 @@
         function filterTransactions(account) {
             const searchId = account === 'checking' ? 'checkingSearch' : 'creditSearch';
             const searchTerm = document.getElementById(searchId).value.toLowerCase();
-            let transactions = state.transactions.filter(t => t.account === account);
+            const currentCycle = getCurrentCycleRange();
+            let transactions = state.transactions
+                .filter((t) => isTransactionInCycle(t, currentCycle))
+                .filter(t => t.account === account);
             if (searchTerm) {
                 transactions = transactions.filter(t => (t.displayName || t.name).toLowerCase().includes(searchTerm) || (t.category && t.category.toLowerCase().includes(searchTerm)));
             }
@@ -3985,7 +4065,7 @@
                     transactions = transactions.filter(t => getCheckingType(t) === checkingTypeFilter);
                 }
             }
-            const recurringNames = detectRecurring(state.transactions);
+            const recurringNames = detectRecurring(transactions);
             updateTransactionList(account, transactions, recurringNames);
         }
 
