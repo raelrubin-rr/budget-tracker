@@ -60,6 +60,30 @@ function buildFallbackHoldingForAccount(account) {
   }];
 }
 
+
+function readPerformancePercent(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return Number(parsed.toFixed(1));
+  }
+
+  return null;
+}
+
+function resolveHoldingYtdPerformance(holding = {}, security = {}) {
+  return readPerformancePercent(
+    holding.ytd_return,
+    holding.ytdReturn,
+    holding.ytd_performance_pct,
+    holding.ytdPerformancePct,
+    security.ytd_return,
+    security.ytdReturn,
+    security.ytd_performance_pct,
+    security.ytdPerformancePct,
+  );
+}
+
 function buildLiabilityDetails(account, liabilityByAccountId = {}) {
   const isLiability = ['credit', 'loan', 'liability'].includes((account?.type || '').toLowerCase());
   if (!isLiability) return {};
@@ -77,24 +101,11 @@ function buildLiabilityDetails(account, liabilityByAccountId = {}) {
   const plaidPaymentAmount = Number(plaidLiability.paymentAmount);
   const paymentAmount = Number.isFinite(plaidPaymentAmount) ? Number(plaidPaymentAmount.toFixed(2)) : null;
 
-  const institutionName = String(account?.institutionName || '').toLowerCase();
-  const accountName = String(account?.name || '').toLowerCase();
-  const isFirstTechLinkedLiability = institutionName.includes('first tech') && isLiability && /line of credit|credit line|credit card|loan/.test(accountName);
-
-  const fixedFirstTechDetails = isFirstTechLinkedLiability
-    ? {
-      interestRate: 2.84,
-      nextPaymentDate: computeMonthlyRollingDate('2026-03-21'),
-      paymentAmount: 550,
-    }
-    : {};
-
   return {
     interestRate,
     termMonths,
     nextPaymentDate: nextPaymentDate ? nextPaymentDate.toISOString().split('T')[0] : null,
     paymentAmount,
-    ...fixedFirstTechDetails,
   };
 }
 
@@ -107,23 +118,6 @@ function parseIsoDate(rawValue) {
   return trimmed;
 }
 
-
-function computeMonthlyRollingDate(anchorIsoDate, referenceDate = new Date()) {
-  if (typeof anchorIsoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(anchorIsoDate)) return null;
-
-  const [year, month, day] = anchorIsoDate.split('-').map(Number);
-  const ref = new Date(referenceDate);
-  if (Number.isNaN(ref.getTime())) return anchorIsoDate;
-
-  let next = new Date(year, month - 1, day);
-  if (Number.isNaN(next.getTime())) return anchorIsoDate;
-
-  while (next < ref) {
-    next = new Date(next.getFullYear(), next.getMonth() + 1, day);
-  }
-
-  return next.toISOString().split('T')[0];
-}
 
 async function fetchInvestmentsHoldings(access_token) {
   try {
@@ -451,10 +445,33 @@ module.exports = async (req, res) => {
               value,
               weight: holdingsTotal > 0 ? Number(((value / holdingsTotal) * 100).toFixed(1)) : 0,
               livePct,
-              ytdPct: null,
+              ytdPct: resolveHoldingYtdPerformance(holding, security),
             };
           })
           : buildFallbackHoldingForAccount(acc);
+
+        const weightedYtdPct = mappedHoldings.length
+          ? mappedHoldings.reduce((sum, holding) => {
+            const pct = Number(holding?.ytdPct);
+            const weight = Number(holding?.weight);
+            if (!Number.isFinite(pct) || !Number.isFinite(weight) || weight <= 0) return sum;
+            return sum + ((pct * weight) / 100);
+          }, 0)
+          : null;
+        const hasAnyHoldingYtd = mappedHoldings.some((holding) => Number.isFinite(Number(holding?.ytdPct)));
+        const accountYtdPct = readPerformancePercent(
+          acc.ytd_performance_pct,
+          acc.ytdPerformancePct,
+          acc.performance_ytd,
+          acc.performanceYtd,
+          hasAnyHoldingYtd ? weightedYtdPct : null,
+        );
+        const accountCurrentPct = readPerformancePercent(
+          acc.current_performance_pct,
+          acc.currentPerformancePct,
+          acc.performance_current,
+          acc.performanceCurrent,
+        );
 
         return {
           id: acc.account_id,
@@ -464,6 +481,8 @@ module.exports = async (req, res) => {
           institutionName: acc?.official_name || acc?.institution_name || null,
           balance: acc.balances.current,
           holdings: mappedHoldings,
+          ytdPerformancePct: accountYtdPct,
+          currentPerformancePct: accountCurrentPct,
           ...buildLiabilityDetails(acc, liabilityByAccountId),
         };
       }),
