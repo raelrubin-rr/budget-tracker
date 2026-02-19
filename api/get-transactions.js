@@ -64,7 +64,10 @@ function buildFallbackHoldingForAccount(account) {
 function readPerformancePercent(...values) {
   for (const value of values) {
     if (value === null || value === undefined || value === '') continue;
-    const parsed = Number(value);
+    const normalizedValue = typeof value === 'string'
+      ? value.replace(/[,%\s]/g, '')
+      : value;
+    const parsed = Number(normalizedValue);
     if (Number.isFinite(parsed)) return Number(parsed.toFixed(1));
   }
 
