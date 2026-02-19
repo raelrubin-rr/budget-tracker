@@ -7,7 +7,8 @@
     <script>
         (function () {
             const auth = localStorage.getItem('budgetTrackerAuth');
-            if (auth !== 'authenticated') {
+            const userId = localStorage.getItem('budgetTrackerUserId');
+            if (auth !== 'authenticated' || !userId) {
                 window.location.replace('/login?next=/app');
             }
         })();
@@ -2401,23 +2402,6 @@
         let remoteStateLoadFailed = false;
         let localSnapshotUpdatedAt = null;
 
-        const DEFAULT_SEIA_401K = {
-            id: 'custom::seia-401k',
-            name: 'SEIA 401(k)',
-            type: 'depository',
-            subtype: 'retirement',
-            custodian: 'ADP',
-            startBalance: 21068.89,
-            startDate: '2026-02-17',
-            baselinePerformancePct: 3.71,
-            baselinePerformanceDate: '2026-02-17',
-            contributionAmount: 365,
-            contributionFrequencyDays: 14,
-            contributionStartDate: '2026-01-09',
-            nextContributionDate: '2026-02-17',
-            proxySymbol: 'vt.us',
-        };
-
         function loadBillingHistory() {
             try {
                 const raw = localStorage.getItem(BILLING_HISTORY_KEY);
@@ -2559,6 +2543,11 @@
         function getTransactionIdentityKey(tx) {
             if (!tx || typeof tx !== 'object') return '';
             if (tx.id) return String(tx.id);
+            return getTransactionFallbackKey(tx);
+        }
+
+        function getTransactionFallbackKey(tx) {
+            if (!tx || typeof tx !== 'object') return '';
             const accountId = tx.sourceAccountId || tx.accountId || 'account';
             const name = String(tx.name || '').trim();
             const date = String(tx.date || '').trim();
@@ -2825,36 +2814,6 @@
             const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
             const dd = String(d.getUTCDate()).padStart(2, '0');
             return `${yyyy}-${mm}-${dd}`;
-        }
-
-        function ensureDefaultCustomAssets() {
-            if (!Array.isArray(state.customAssets)) state.customAssets = [];
-            const existing = state.customAssets.find((asset) => asset?.id === DEFAULT_SEIA_401K.id);
-            if (!existing) {
-                state.customAssets.push({ ...DEFAULT_SEIA_401K });
-                return;
-            }
-
-            state.customAssets = state.customAssets.map((asset) => {
-                if (asset?.id !== DEFAULT_SEIA_401K.id) return asset;
-                return {
-                    ...asset,
-                    id: DEFAULT_SEIA_401K.id,
-                    name: DEFAULT_SEIA_401K.name,
-                    type: DEFAULT_SEIA_401K.type,
-                    subtype: DEFAULT_SEIA_401K.subtype,
-                    custodian: DEFAULT_SEIA_401K.custodian,
-                    startBalance: DEFAULT_SEIA_401K.startBalance,
-                    startDate: DEFAULT_SEIA_401K.startDate,
-                    baselinePerformancePct: DEFAULT_SEIA_401K.baselinePerformancePct,
-                    baselinePerformanceDate: DEFAULT_SEIA_401K.baselinePerformanceDate,
-                    contributionAmount: DEFAULT_SEIA_401K.contributionAmount,
-                    contributionFrequencyDays: DEFAULT_SEIA_401K.contributionFrequencyDays,
-                    contributionStartDate: DEFAULT_SEIA_401K.contributionStartDate,
-                    nextContributionDate: DEFAULT_SEIA_401K.nextContributionDate,
-                    proxySymbol: DEFAULT_SEIA_401K.proxySymbol,
-                };
-            });
         }
 
         async function fetchProxyHistory(symbol, startDate) {
@@ -3315,74 +3274,12 @@
         }
 
         async function upsertEstimatedCustomAccounts(baseAccounts = []) {
-            ensureDefaultCustomAssets();
             const generated = [];
-            for (const customAsset of state.customAssets) {
+            for (const customAsset of (Array.isArray(state.customAssets) ? state.customAssets : [])) {
                 generated.push(await buildEstimatedCustomAccount(customAsset));
             }
             const nonCustom = (baseAccounts || []).filter((acc) => !acc?.customAsset);
             return [...nonCustom, ...generated];
-        }
-
-        function loadDemoData(preserveSettings = false) {
-            const demoState = {
-                income: 6500, savings: 1000, budgetStartDay: 4, billingHistory: state.billingHistory || [],
-                accounts: [
-                    { id: 'demo-checking', name: 'Everyday Checking', type: 'depository', subtype: 'checking', balance: 8420, custodian: 'Chase', lastUpdatedAt: new Date().toISOString() },
-                    { id: 'demo-savings', name: 'Emergency Savings', type: 'depository', subtype: 'savings', balance: 18600, custodian: 'Chase', lastUpdatedAt: new Date().toISOString() },
-                    { id: 'demo-credit', name: 'Freedom Unlimited', type: 'credit', subtype: 'credit card', balance: 1430, custodian: 'Chase', interestRate: 22.49, termMonths: 36, nextPaymentDate: '2026-03-06', paymentAmount: 145, lastUpdatedAt: new Date().toISOString() }
-                ],
-                fixedExpenses: [
-                    { name: 'Rent', amount: 2200 }, { name: 'Car Payment', amount: 450 },
-                    { name: 'Insurance', amount: 180 }, { name: 'Utilities', amount: 120 }, { name: 'Subscriptions', amount: 85 }
-                ],
-                transactions: [
-                    { name: 'Paycheck Deposit', amount: 3250, date: '2026-02-14', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
-                    { name: 'Paycheck Deposit', amount: 3250, date: '2026-01-31', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
-                    { name: 'Venmo from Sarah', amount: 45, date: '2026-02-12', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
-                    { name: 'Venmo from Mike', amount: 39, date: '2026-02-12', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
-                    { name: 'Venmo from Jessica', amount: 62, date: '2026-02-09', pending: false, account: 'checking', includeInBudget: false, accountId: 'demo-checking', category: 'other' },
-                    { name: 'Whole Foods', amount: -87, date: '2026-02-13', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
-                    { name: 'Shell Gas Station', amount: -52, date: '2026-02-12', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
-                    { name: 'Target', amount: -125, date: '2026-02-11', pending: true, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'shopping' },
-                    { name: 'Dinner at Mastros', amount: -187, date: '2026-02-10', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 84, linkedDeposit: 3, category: 'dining' },
-                    { name: 'Starbucks', amount: -7, date: '2026-02-10', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
-                    { name: 'Uber Eats', amount: -38, date: '2026-02-09', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
-                    { name: 'Amazon Prime', amount: -15, date: '2026-02-09', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Movie Tickets AMC', amount: -44, date: '2026-02-08', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'entertainment' },
-                    { name: 'Chipotle', amount: -14, date: '2026-02-08', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
-                    { name: 'Drinks at Bar 54', amount: -89, date: '2026-02-07', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 62, linkedDeposit: 4, category: 'dining' },
-                    { name: 'Trader Joes', amount: -68, date: '2026-02-06', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
-                    { name: 'CVS Pharmacy', amount: -23, date: '2026-02-05', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'other' },
-                    { name: 'Spotify Premium', amount: -11, date: '2026-02-04', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Whole Foods', amount: -92, date: '2026-01-27', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
-                    { name: 'Shell Gas Station', amount: -48, date: '2026-01-24', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
-                    { name: 'Dinner at Nobu', amount: -156, date: '2026-01-20', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'dining' },
-                    { name: 'Target', amount: -89, date: '2026-01-18', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'shopping' },
-                    { name: 'Netflix', amount: -16, date: '2026-01-14', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Amazon Prime', amount: -15, date: '2026-01-09', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Spotify Premium', amount: -11, date: '2026-01-04', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' },
-                    { name: 'Whole Foods', amount: -78, date: '2025-12-28', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'groceries' },
-                    { name: 'Shell Gas Station', amount: -55, date: '2025-12-22', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'transportation' },
-                    { name: 'Netflix', amount: -16, date: '2025-12-14', pending: false, account: 'credit', accountId: 'demo-credit', reimbursable: 0, linkedDeposit: null, category: 'subscription' }
-                ]
-            };
-
-            state = preserveSettings
-                ? {
-                    ...demoState,
-                    income: state.income || demoState.income,
-                    savings: state.savings || demoState.savings,
-                    budgetStartDay: state.budgetStartDay || demoState.budgetStartDay,
-                    fixedExpenses: state.fixedExpenses.length ? state.fixedExpenses : demoState.fixedExpenses,
-                    billingHistory: state.billingHistory || demoState.billingHistory || [],
-                    accountVisibility: state.accountVisibility || {},
-                    customAssets: Array.isArray(state.customAssets) ? state.customAssets : [],
-                }
-                : { ...demoState, accountVisibility: state.accountVisibility || {}, customAssets: Array.isArray(state.customAssets) ? state.customAssets : [] };
-            state.lastAccountsUpdatedAt = new Date().toISOString();
-
-            updateUI();
         }
 
         function getBudgetPeriod() {
@@ -3815,14 +3712,12 @@
 
         function getProfileId() {
             const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
-            if (authenticatedUser) {
-                const userScopedId = `user::${authenticatedUser}`;
-                const currentId = String(localStorage.getItem(PROFILE_ID_KEY) || '').trim();
-                if (!currentId || currentId.startsWith('user::')) {
-                    localStorage.setItem(PROFILE_ID_KEY, userScopedId);
-                    return userScopedId;
-                }
-                return currentId;
+            const authenticatedUserId = String(localStorage.getItem('budgetTrackerUserId') || '').trim();
+            if (authenticatedUser || authenticatedUserId) {
+                const stableIdentity = authenticatedUser || authenticatedUserId;
+                const userScopedId = `user::${stableIdentity}`;
+                localStorage.setItem(PROFILE_ID_KEY, userScopedId);
+                return userScopedId;
             }
 
             let profileId = localStorage.getItem(PROFILE_ID_KEY);
@@ -3931,11 +3826,17 @@
         async function loadRemoteState() {
             isHydratingRemoteState = true;
             try {
+                const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
+                const currentProfileId = getProfileId();
+                const legacyProfileId = authenticatedUser
+                    ? String(localStorage.getItem('budgetLegacyProfileId') || '').trim()
+                    : '';
+
                 const response = await fetch('/api/load-state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        profileId: getProfileId(),
+                        profileId: currentProfileId,
                         cycleId: getCurrentCycleId(),
                     }),
                 });
@@ -3948,7 +3849,35 @@
                 remoteStateReady = true;
                 remoteStateLoadFailed = false;
                 const data = await response.json();
-                const remoteState = data?.state;
+                let remoteState = data?.state;
+
+                if (authenticatedUser && !data?.found && legacyProfileId && legacyProfileId !== currentProfileId) {
+                    const legacyResponse = await fetch('/api/load-state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            profileId: legacyProfileId,
+                            cycleId: getCurrentCycleId(),
+                        }),
+                    });
+
+                    if (legacyResponse.ok) {
+                        const legacyData = await legacyResponse.json();
+                        if (legacyData?.found && legacyData?.state) {
+                            remoteState = legacyData.state;
+                            await fetch('/api/save-state', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    profileId: currentProfileId,
+                                    cycleId: getCurrentCycleId(),
+                                    state: remoteState,
+                                }),
+                            });
+                        }
+                    }
+                }
+
                 if (!remoteState || typeof remoteState !== 'object') return;
 
                 if (data?.recoveredProfile && data?.profileId) {
@@ -4533,8 +4462,12 @@
             if (!tx || tx.account !== 'checking' || tx.amount >= 0) return;
             tx.includeInBudget = !tx.includeInBudget;
             const overrides = loadTransactionOverrides();
-            const txId = tx.id || `${tx.accountId || 'account'}::${tx.name}::${tx.date}`;
+            const txId = getTransactionIdentityKey(tx);
+            const fallbackKey = getTransactionFallbackKey(tx);
             overrides[txId] = { ...(overrides[txId] || {}), includeInBudget: tx.includeInBudget };
+            if (fallbackKey && fallbackKey !== txId) {
+                overrides[fallbackKey] = { ...(overrides[fallbackKey] || {}), includeInBudget: tx.includeInBudget };
+            }
             persistTransactionOverrides(overrides);
             updateUI();
         }
@@ -4791,6 +4724,7 @@
                 }
                 const overrides = loadTransactionOverrides();
                 const txId = getTransactionIdentityKey(targetTx);
+                const fallbackKey = getTransactionFallbackKey(targetTx);
                 overrides[txId] = {
                     ...(overrides[txId] || {}),
                     category: targetTx.category,
@@ -4801,6 +4735,12 @@
                     displayName: targetTx.displayName || sanitizeTransactionLabel(targetTx.name),
                     name: targetTx.name,
                 };
+                if (fallbackKey && fallbackKey !== txId) {
+                    overrides[fallbackKey] = {
+                        ...(overrides[fallbackKey] || {}),
+                        ...overrides[txId],
+                    };
+                }
                 persistTransactionOverrides(overrides);
                 updateUI();
                 closeModal('reimbursableModal');
@@ -4893,6 +4833,10 @@
         const PLAID_ITEMS_STORAGE_KEY = 'plaid_items';
         let plaidHandler = null;
 
+        function getPlaidItemsStorageKey() {
+            return `${PLAID_ITEMS_STORAGE_KEY}::${getProfileId()}`;
+        }
+
         function normalizePlaidItems(items) {
             if (!Array.isArray(items)) return [];
             return items.filter(item => item && item.accessToken).map(item => ({
@@ -4905,7 +4849,7 @@
 
         function loadPlaidItems() {
             try {
-                const parsed = JSON.parse(localStorage.getItem(PLAID_ITEMS_STORAGE_KEY) || '[]');
+                const parsed = JSON.parse(localStorage.getItem(getPlaidItemsStorageKey()) || '[]');
                 const normalized = normalizePlaidItems(parsed);
                 if (normalized.length) return normalized;
             } catch (error) {
@@ -4925,7 +4869,7 @@
 
         function persistPlaidItems(items) {
             const normalizedItems = normalizePlaidItems(items);
-            localStorage.setItem(PLAID_ITEMS_STORAGE_KEY, JSON.stringify(normalizedItems));
+            localStorage.setItem(getPlaidItemsStorageKey(), JSON.stringify(normalizedItems));
 
             if (normalizedItems.length) {
                 const latest = normalizedItems[normalizedItems.length - 1];
@@ -5028,9 +4972,8 @@
 
         async function fetchTransactions() {
             if (!plaidItems.length) {
-                console.log('No Plaid items, loading demo data');
-                loadDemoData(true);
                 state.accounts = await upsertEstimatedCustomAccounts(state.accounts);
+                state.transactions = Array.isArray(state.transactions) ? state.transactions.map(normalizeTransactionCategory) : [];
                 updateUI();
                 return;
             }
@@ -5105,7 +5048,8 @@
                 });
                 state.transactions = mergedTransactions.map((tx) => {
                     const identityKey = getTransactionIdentityKey(tx);
-                    const override = transactionOverrides[tx.id] || transactionOverrides[identityKey] || {};
+                    const fallbackKey = getTransactionFallbackKey(tx);
+                    const override = transactionOverrides[tx.id] || transactionOverrides[identityKey] || transactionOverrides[fallbackKey] || {};
                     return normalizeTransactionCategory({
                         ...tx,
                         name: override.name || tx.name,

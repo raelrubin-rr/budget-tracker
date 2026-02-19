@@ -3,71 +3,149 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Log In | Raelyboy</title>
+  <title>Account Access | Raelyboy</title>
   <link rel="stylesheet" href="/assets/public.css" />
 </head>
 <body>
   <div class="page">
     <header>
       <div class="container">
-        <h1 class="brand">Log In</h1>
+        <h1 class="brand">Account Access</h1>
       </div>
     </header>
 
     <main>
       <div class="container">
         <section class="card">
-          <p>Sign in to access the private dashboard.</p>
+          <p>Create an account for private testing, or sign in to your existing account.</p>
+
+          <div class="btn-group" style="margin-bottom: 16px;">
+            <button class="btn" type="button" id="show-login">Sign In</button>
+            <button class="btn btn-secondary" type="button" id="show-register">Create Account</button>
+          </div>
+
           <form id="login-form">
             <div class="form-row">
-              <label for="username">Username</label>
-              <input id="username" name="username" autocomplete="username" required />
+              <label for="login-username">Username or Email</label>
+              <input id="login-username" name="username" autocomplete="username" required />
             </div>
             <div class="form-row">
-              <label for="password">Password</label>
-              <input id="password" name="password" type="password" autocomplete="current-password" required />
+              <label for="login-password">Password</label>
+              <input id="login-password" name="password" type="password" autocomplete="current-password" required />
             </div>
-            <button class="btn" type="submit">Access App</button>
-            <p class="error" id="error" aria-live="polite"></p>
+            <button class="btn" type="submit">Sign In</button>
           </form>
+
+          <form id="register-form" style="display:none;">
+            <div class="form-row">
+              <label for="register-username">Username</label>
+              <input id="register-username" autocomplete="username" required />
+            </div>
+            <div class="form-row">
+              <label for="register-password">Password</label>
+              <input id="register-password" type="password" autocomplete="new-password" required minlength="8" />
+            </div>
+            <div class="form-row">
+              <label for="register-name">Full Name</label>
+              <input id="register-name" autocomplete="name" required />
+            </div>
+            <div class="form-row">
+              <label for="register-email">Email</label>
+              <input id="register-email" type="email" autocomplete="email" required />
+            </div>
+            <div class="form-row">
+              <label for="register-phone">Phone</label>
+              <input id="register-phone" type="tel" autocomplete="tel" required />
+            </div>
+            <button class="btn" type="submit">Create Account</button>
+          </form>
+
+          <p class="error" id="error" aria-live="polite"></p>
         </section>
       </div>
     </main>
-
-    <footer class="footer">
-      <div class="container">
-        Contact: <a href="mailto:rael.rubin@me.com">rael.rubin@me.com</a>
-      </div>
-    </footer>
   </div>
 
   <script>
     (function () {
-      const USERNAME = 'r';
-      const PASSWORD = 'r';
-      const form = document.getElementById('login-form');
-      const error = document.getElementById('error');
       const params = new URLSearchParams(window.location.search);
       const next = params.get('next') || '/app';
+      const loginForm = document.getElementById('login-form');
+      const registerForm = document.getElementById('register-form');
+      const error = document.getElementById('error');
 
-      if (localStorage.getItem('budgetTrackerAuth') === 'authenticated') {
+      const showLoginBtn = document.getElementById('show-login');
+      const showRegisterBtn = document.getElementById('show-register');
+
+      function showMode(mode) {
+        const isLogin = mode === 'login';
+        loginForm.style.display = isLogin ? 'block' : 'none';
+        registerForm.style.display = isLogin ? 'none' : 'block';
+        showLoginBtn.classList.toggle('btn-secondary', !isLogin);
+        showRegisterBtn.classList.toggle('btn-secondary', isLogin);
+        error.textContent = '';
+      }
+
+      function setSession(user) {
+        localStorage.setItem('budgetTrackerAuth', 'authenticated');
+        localStorage.setItem('budgetTrackerUser', String(user.username || '').toLowerCase());
+        localStorage.setItem('budgetTrackerUserId', String(user.id || '').trim());
+      }
+
+      if (localStorage.getItem('budgetTrackerAuth') === 'authenticated' && localStorage.getItem('budgetTrackerUserId')) {
         window.location.replace(next);
       }
 
-      form.addEventListener('submit', function (event) {
+      showLoginBtn.addEventListener('click', () => showMode('login'));
+      showRegisterBtn.addEventListener('click', () => showMode('register'));
+
+      loginForm.addEventListener('submit', async function (event) {
         event.preventDefault();
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value;
-
-        if (username === USERNAME && password === PASSWORD) {
-          localStorage.setItem('budgetTrackerAuth', 'authenticated');
-          localStorage.setItem('budgetTrackerUser', username.toLowerCase());
+        error.textContent = '';
+        try {
+          const response = await fetch('/api/auth-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: document.getElementById('login-username').value.trim(),
+              password: document.getElementById('login-password').value,
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok || !data?.user) throw new Error(data?.error || 'Unable to sign in.');
+          setSession(data.user);
           window.location.replace(next);
-          return;
+        } catch (err) {
+          error.textContent = err.message || 'Unable to sign in.';
         }
-
-        error.textContent = 'Invalid username or password.';
       });
+
+      registerForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        error.textContent = '';
+        try {
+          const response = await fetch('/api/auth-register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: document.getElementById('register-username').value.trim(),
+              password: document.getElementById('register-password').value,
+              name: document.getElementById('register-name').value.trim(),
+              email: document.getElementById('register-email').value.trim(),
+              phone: document.getElementById('register-phone').value.trim(),
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok || !data?.user) throw new Error(data?.error || 'Unable to create account.');
+          setSession(data.user);
+          window.location.replace(next);
+        } catch (err) {
+          error.textContent = err.message || 'Unable to create account.';
+        }
+      });
+
+      const requestedMode = params.get('mode') === 'register' ? 'register' : 'login';
+      showMode(requestedMode);
     })();
   </script>
 </body>

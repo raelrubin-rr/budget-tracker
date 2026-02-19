@@ -43,6 +43,16 @@ create table if not exists public.budget_states (
 );
 
 create index if not exists budget_states_cycle_id_idx on public.budget_states (cycle_id);
+
+create table if not exists public.app_users (
+  id uuid primary key default gen_random_uuid(),
+  username text not null unique,
+  email text not null unique,
+  name text not null,
+  phone text not null,
+  password_hash text not null,
+  created_at timestamptz not null default now()
+);
 ```
 
 Then add these environment variables in Vercel:
@@ -55,5 +65,7 @@ Notes:
 - To share the exact same dataset across devices, open **Settings → Connection → Shared Dataset ID**, copy it from one device, and paste/save it on the other device.
 - Only transaction data (transactions + transaction-level overrides) is cleared from Supabase automatically when a new billing cycle starts; all other settings remain unchanged until edited by the user.
 - Persisted data includes transactions, transaction edits, account renames/visibility, income, savings goal, fixed expenses, billing history, and custom assets.
-- A default manual custom asset is included for **SEIA 401(k)**, estimated using VT proxy performance with bi-weekly contributions, and is persisted in the same Supabase state payload.
+
+- Authentication now uses `api/auth-register` and `api/auth-login` backed by Supabase `app_users`; each account syncs to an isolated profile id (`user::<user_id>`).
+- New accounts start with a blank dashboard (no demo transactions/accounts and no default custom SEIA asset).
 
