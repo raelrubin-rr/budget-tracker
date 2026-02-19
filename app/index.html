@@ -2281,11 +2281,11 @@
             type: 'depository',
             subtype: 'retirement',
             custodian: 'ADP',
-            startBalance: 0,
-            startDate: '2026-01-09',
+            startBalance: 21068.89,
+            startDate: '2025-02-17',
             contributionAmount: 365,
             contributionFrequencyDays: 14,
-            nextContributionDate: '2026-01-09',
+            nextContributionDate: '2026-02-20',
             proxySymbol: 'vt.us',
         };
 
@@ -2625,8 +2625,18 @@
             state.customAssets = state.customAssets.map((asset) => {
                 if (asset?.id !== DEFAULT_SEIA_401K.id) return asset;
                 return {
-                    ...DEFAULT_SEIA_401K,
                     ...asset,
+                    id: DEFAULT_SEIA_401K.id,
+                    name: DEFAULT_SEIA_401K.name,
+                    type: DEFAULT_SEIA_401K.type,
+                    subtype: DEFAULT_SEIA_401K.subtype,
+                    custodian: DEFAULT_SEIA_401K.custodian,
+                    startBalance: DEFAULT_SEIA_401K.startBalance,
+                    startDate: DEFAULT_SEIA_401K.startDate,
+                    contributionAmount: DEFAULT_SEIA_401K.contributionAmount,
+                    contributionFrequencyDays: DEFAULT_SEIA_401K.contributionFrequencyDays,
+                    nextContributionDate: DEFAULT_SEIA_401K.nextContributionDate,
+                    proxySymbol: DEFAULT_SEIA_401K.proxySymbol,
                 };
             });
         }
@@ -2778,6 +2788,14 @@
             return estimatedBalance;
         }
 
+        function calculateProxyReturnPercent(history, fromIsoDate, toIsoDate) {
+            if (!Array.isArray(history) || !history.length || !fromIsoDate || !toIsoDate) return null;
+            const fromClose = getCloseOnOrBefore(history, fromIsoDate);
+            const toClose = getCloseOnOrBefore(history, toIsoDate);
+            if (!Number.isFinite(fromClose) || !Number.isFinite(toClose) || fromClose <= 0) return null;
+            return Number((((toClose / fromClose) - 1) * 100).toFixed(1));
+        }
+
         async function buildEstimatedCustomAccount(customAsset) {
             const history = await fetchProxyHistory(customAsset.proxySymbol || 'vt.us', customAsset.startDate);
             const todayIso = formatDateToIso(new Date());
@@ -2801,10 +2819,13 @@
             const netContributed = totalContributions - totalWithdrawals;
             const investedBasis = Number(customAsset.startBalance || 0) + netContributed;
             const performanceBase = Math.abs(investedBasis);
-            const performancePct = performanceBase > 0
+            const fallbackPerformancePct = performanceBase > 0
                 ? Number((((computedBalance - investedBasis) / performanceBase) * 100).toFixed(1))
                 : null;
-            const ytdPerformancePct = performancePct;
+            const performancePct = calculateProxyReturnPercent(history, customAsset.startDate, todayIso) ?? fallbackPerformancePct;
+            const currentYearStartIso = `${new Date().getUTCFullYear()}-01-01`;
+            const ytdStartIso = customAsset.startDate > currentYearStartIso ? customAsset.startDate : currentYearStartIso;
+            const ytdPerformancePct = calculateProxyReturnPercent(history, ytdStartIso, todayIso) ?? performancePct;
 
             return {
                 id: customAsset.id,
