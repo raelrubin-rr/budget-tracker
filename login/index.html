@@ -17,13 +17,6 @@
     <main>
       <div class="container">
         <section class="card">
-          <p>Create an account for private testing, or sign in to your existing account.</p>
-
-          <div class="btn-group" style="margin-bottom: 16px;">
-            <button class="btn" type="button" id="show-login">Sign In</button>
-            <button class="btn btn-secondary" type="button" id="show-register">Create Account</button>
-          </div>
-
           <form id="login-form">
             <div class="form-row">
               <label for="login-username">Username or Email</label>
@@ -33,7 +26,10 @@
               <label for="login-password">Password</label>
               <input id="login-password" name="password" type="password" autocomplete="current-password" required />
             </div>
-            <button class="btn" type="submit">Sign In</button>
+            <div class="actions auth-actions">
+              <button class="btn" type="submit">Sign In</button>
+              <a class="btn secondary" href="/">Back</a>
+            </div>
           </form>
 
           <form id="register-form" style="display:none;">
@@ -57,7 +53,10 @@
               <label for="register-phone">Phone</label>
               <input id="register-phone" type="tel" autocomplete="tel" required />
             </div>
-            <button class="btn" type="submit">Create Account</button>
+            <div class="actions auth-actions">
+              <button class="btn" type="submit">Create Account</button>
+              <a class="btn secondary" href="/">Back</a>
+            </div>
           </form>
 
           <p class="error" id="error" aria-live="polite"></p>
@@ -70,21 +69,10 @@
     (function () {
       const params = new URLSearchParams(window.location.search);
       const next = params.get('next') || '/app';
+      const requestedMode = params.get('mode') === 'register' ? 'register' : 'login';
       const loginForm = document.getElementById('login-form');
       const registerForm = document.getElementById('register-form');
       const error = document.getElementById('error');
-
-      const showLoginBtn = document.getElementById('show-login');
-      const showRegisterBtn = document.getElementById('show-register');
-
-      function showMode(mode) {
-        const isLogin = mode === 'login';
-        loginForm.style.display = isLogin ? 'block' : 'none';
-        registerForm.style.display = isLogin ? 'none' : 'block';
-        showLoginBtn.classList.toggle('btn-secondary', !isLogin);
-        showRegisterBtn.classList.toggle('btn-secondary', isLogin);
-        error.textContent = '';
-      }
 
       function setSession(user) {
         localStorage.setItem('budgetTrackerAuth', 'authenticated');
@@ -96,8 +84,9 @@
         window.location.replace(next);
       }
 
-      showLoginBtn.addEventListener('click', () => showMode('login'));
-      showRegisterBtn.addEventListener('click', () => showMode('register'));
+      const isLogin = requestedMode === 'login';
+      loginForm.style.display = isLogin ? 'block' : 'none';
+      registerForm.style.display = isLogin ? 'none' : 'block';
 
       loginForm.addEventListener('submit', async function (event) {
         event.preventDefault();
@@ -143,9 +132,6 @@
           error.textContent = err.message || 'Unable to create account.';
         }
       });
-
-      const requestedMode = params.get('mode') === 'register' ? 'register' : 'login';
-      showMode(requestedMode);
     })();
   </script>
 </body>
