@@ -415,7 +415,7 @@ module.exports = async (req, res) => {
         accountId: tx.account_id,
         name: tx.name,
         amount: normalizedAmount,
-        date: tx.date,
+        date: tx.authorized_date || tx.date,
         pending: tx.pending,
         account: accountType,
         includeInBudget: accountType === 'checking' ? false : true,
