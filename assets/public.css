@@ -203,6 +203,22 @@ a {
   margin-bottom: 12px;
 }
 
+.form-row-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.form-row-inline label {
+  margin-bottom: 0;
+}
+
+.form-row-inline input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--blue);
+}
+
 label {
   display: block;
   font-size: 14px;

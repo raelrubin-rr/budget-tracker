@@ -26,6 +26,10 @@
               <label for="login-password">Password</label>
               <input id="login-password" name="password" type="password" autocomplete="current-password" required />
             </div>
+            <div class="form-row form-row-inline">
+              <label for="stay-signed-in">Stay signed in</label>
+              <input id="stay-signed-in" name="staySignedIn" type="checkbox" checked />
+            </div>
             <div class="actions auth-actions">
               <button class="btn" type="submit">Sign In</button>
               <a class="btn secondary" href="/">Back</a>
@@ -72,15 +76,59 @@
       const requestedMode = params.get('mode') === 'register' ? 'register' : 'login';
       const loginForm = document.getElementById('login-form');
       const registerForm = document.getElementById('register-form');
+      const staySignedInCheckbox = document.getElementById('stay-signed-in');
       const error = document.getElementById('error');
 
-      function setSession(user) {
-        localStorage.setItem('budgetTrackerAuth', 'authenticated');
-        localStorage.setItem('budgetTrackerUser', String(user.username || '').toLowerCase());
-        localStorage.setItem('budgetTrackerUserId', String(user.id || '').trim());
+      function getStoredValue(key) {
+        return localStorage.getItem(key) || sessionStorage.getItem(key) || '';
       }
 
-      if (localStorage.getItem('budgetTrackerAuth') === 'authenticated' && localStorage.getItem('budgetTrackerUserId')) {
+      function clearSessionState() {
+        localStorage.removeItem('budgetTrackerAuth');
+        localStorage.removeItem('budgetTrackerUser');
+        localStorage.removeItem('budgetTrackerUserId');
+        sessionStorage.removeItem('budgetTrackerAuth');
+        sessionStorage.removeItem('budgetTrackerUser');
+        sessionStorage.removeItem('budgetTrackerUserId');
+      }
+
+      function resetAppLocalState() {
+        const keys = [
+          'budget_profile_id_v1',
+          'budget_local_state_snapshot_v1',
+          'budget_billing_history_v1',
+          'budget_monthly_expense_history_v1',
+          'budget_account_visibility_v1',
+          'budget_account_overrides_v1',
+          'budget_transaction_overrides_v1',
+          'plaid_access_token',
+          'plaid_item_id',
+          'plaid_institution',
+          'budget_plaid_items_v1',
+        ];
+        keys.forEach((key) => {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        });
+      }
+
+      function setSession(user, rememberMe) {
+        const normalizedUser = String(user.username || '').toLowerCase();
+        const normalizedUserId = String(user.id || '').trim();
+        const previousUserId = getStoredValue('budgetTrackerUserId');
+
+        if (previousUserId && previousUserId !== normalizedUserId) {
+          resetAppLocalState();
+        }
+
+        clearSessionState();
+        const storage = rememberMe ? localStorage : sessionStorage;
+        storage.setItem('budgetTrackerAuth', 'authenticated');
+        storage.setItem('budgetTrackerUser', normalizedUser);
+        storage.setItem('budgetTrackerUserId', normalizedUserId);
+      }
+
+      if (getStoredValue('budgetTrackerAuth') === 'authenticated' && getStoredValue('budgetTrackerUserId')) {
         window.location.replace(next);
       }
 
@@ -102,7 +150,7 @@
           });
           const data = await response.json();
           if (!response.ok || !data?.user) throw new Error(data?.error || 'Unable to sign in.');
-          setSession(data.user);
+          setSession(data.user, Boolean(staySignedInCheckbox?.checked));
           window.location.replace(next);
         } catch (err) {
           error.textContent = err.message || 'Unable to sign in.';
@@ -126,7 +174,7 @@
           });
           const data = await response.json();
           if (!response.ok || !data?.user) throw new Error(data?.error || 'Unable to create account.');
-          setSession(data.user);
+          setSession(data.user, Boolean(staySignedInCheckbox?.checked));
           window.location.replace(next);
         } catch (err) {
           error.textContent = err.message || 'Unable to create account.';

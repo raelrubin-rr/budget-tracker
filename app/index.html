@@ -6,8 +6,8 @@
     <title>Raelyboy</title>
     <script>
         (function () {
-            const auth = localStorage.getItem('budgetTrackerAuth');
-            const userId = localStorage.getItem('budgetTrackerUserId');
+            const auth = localStorage.getItem('budgetTrackerAuth') || sessionStorage.getItem('budgetTrackerAuth');
+            const userId = localStorage.getItem('budgetTrackerUserId') || sessionStorage.getItem('budgetTrackerUserId');
             if (auth !== 'authenticated' || !userId) {
                 window.location.replace('/login?next=/app');
             }
@@ -2045,6 +2045,11 @@
                 <div class="sidebar-section-title">Export</div>
                 <button class="btn btn-secondary" onclick="exportToCSV(); toggleSidebar();">Download CSV</button>
             </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Account</div>
+                <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
+            </div>
         </div>
         <button class="sidebar-sync-footer" onclick="openDatasetModal()" title="Click to copy or update shared dataset id">
             Profile Sync ID: <span id="sidebarDatasetId">--</span>
@@ -3737,6 +3742,21 @@
             return `${raw.slice(0, 8)}…${raw.slice(-4)}`;
         }
 
+        function clearAuthSession() {
+            localStorage.removeItem('budgetTrackerAuth');
+            localStorage.removeItem('budgetTrackerUser');
+            localStorage.removeItem('budgetTrackerUserId');
+            sessionStorage.removeItem('budgetTrackerAuth');
+            sessionStorage.removeItem('budgetTrackerUser');
+            sessionStorage.removeItem('budgetTrackerUserId');
+        }
+
+        function signOut() {
+            clearAuthSession();
+            window.location.replace('/login?mode=login');
+        }
+
+
         function openDatasetModal() {
             document.getElementById('datasetIdInput').value = getProfileId();
             document.getElementById('datasetModal').classList.add('active');
@@ -3826,7 +3846,7 @@
         async function loadRemoteState() {
             isHydratingRemoteState = true;
             try {
-                const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
+                const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || sessionStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
                 const currentProfileId = getProfileId();
                 const legacyProfileId = authenticatedUser
                     ? String(localStorage.getItem('budgetLegacyProfileId') || '').trim()
