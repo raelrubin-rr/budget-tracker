@@ -61,6 +61,7 @@
 
         if (username === USERNAME && password === PASSWORD) {
           localStorage.setItem('budgetTrackerAuth', 'authenticated');
+          localStorage.setItem('budgetTrackerUser', username.toLowerCase());
           window.location.replace(next);
           return;
         }
