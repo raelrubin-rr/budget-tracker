@@ -9,6 +9,7 @@ function sanitizeState(payload) {
       budgetStartDay: 4,
       fixedExpenses: [],
       billingHistory: [],
+      monthlyExpenseHistory: [],
       accountVisibility: {},
       accounts: [],
       transactions: [],
@@ -26,6 +27,7 @@ function sanitizeState(payload) {
     budgetStartDay: Number(payload.budgetStartDay || 4),
     fixedExpenses: Array.isArray(payload.fixedExpenses) ? payload.fixedExpenses : [],
     billingHistory: Array.isArray(payload.billingHistory) ? payload.billingHistory : [],
+    monthlyExpenseHistory: Array.isArray(payload.monthlyExpenseHistory) ? payload.monthlyExpenseHistory : [],
     accountVisibility: payload.accountVisibility && typeof payload.accountVisibility === 'object' ? payload.accountVisibility : {},
     accounts: Array.isArray(payload.accounts) ? payload.accounts : [],
     transactions: Array.isArray(payload.transactions) ? payload.transactions : [],
@@ -58,7 +60,7 @@ module.exports = async (req, res) => {
       cycle_id: cycleId || null,
       payload,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'profile_id' });
+    }, { onConflict: 'profile_id,cycle_id' });
 
     if (error) throw error;
     return res.status(200).json({ ok: true });

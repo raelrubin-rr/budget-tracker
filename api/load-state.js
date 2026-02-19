@@ -8,6 +8,7 @@ function emptyPayload() {
     budgetStartDay: null,
     fixedExpenses: [],
     billingHistory: [],
+    monthlyExpenseHistory: [],
     accountVisibility: {},
     accounts: [],
     transactions: [],
@@ -28,6 +29,7 @@ function normalizePayload(payload) {
     ...payload,
     fixedExpenses: Array.isArray(payload.fixedExpenses) ? payload.fixedExpenses : [],
     billingHistory: Array.isArray(payload.billingHistory) ? payload.billingHistory : [],
+    monthlyExpenseHistory: Array.isArray(payload.monthlyExpenseHistory) ? payload.monthlyExpenseHistory : [],
     accountVisibility: payload.accountVisibility && typeof payload.accountVisibility === 'object' ? payload.accountVisibility : {},
     accounts: Array.isArray(payload.accounts) ? payload.accounts : [],
     transactions: Array.isArray(payload.transactions) ? payload.transactions : [],
@@ -52,25 +54,29 @@ module.exports = async (req, res) => {
     if (!profileId) return res.status(400).json({ error: 'profileId is required' });
 
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from(BUDGET_STATE_TABLE)
-      .select('profile_id, cycle_id, payload, updated_at')
-      .eq('profile_id', profileId)
-      .maybeSingle();
+    let resolvedRow = null;
 
-    if (error) throw error;
-    let resolvedRow = data;
-
-    if (!resolvedRow) {
-      const { data: fallbackData, error: fallbackError } = await supabase
+    if (cycleId) {
+      const { data: cycleData, error: cycleError } = await supabase
         .from(BUDGET_STATE_TABLE)
         .select('profile_id, cycle_id, payload, updated_at')
+        .eq('profile_id', profileId)
+        .eq('cycle_id', cycleId)
+        .maybeSingle();
+      if (cycleError) throw cycleError;
+      resolvedRow = cycleData || null;
+    }
+
+    if (!resolvedRow) {
+      const { data: latestData, error: latestError } = await supabase
+        .from(BUDGET_STATE_TABLE)
+        .select('profile_id, cycle_id, payload, updated_at')
+        .eq('profile_id', profileId)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-
-      if (fallbackError) throw fallbackError;
-      resolvedRow = fallbackData || null;
+      if (latestError) throw latestError;
+      resolvedRow = latestData || null;
     }
 
     if (!resolvedRow) return res.status(200).json({ state: emptyPayload(), found: false });
@@ -81,8 +87,8 @@ module.exports = async (req, res) => {
       state: payload,
       found: true,
       profileId: resolvedRow.profile_id,
-      recoveredProfile: resolvedRow.profile_id !== profileId,
-      cycleId: cycleId || resolvedRow.cycle_id || null,
+      recoveredProfile: false,
+      cycleId: resolvedRow.cycle_id || cycleId || null,
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to load state', details: error.message || 'Unknown error' });

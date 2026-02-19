@@ -1394,6 +1394,8 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            min-width: 120px;
+            text-align: right;
         }
 
         .holding-value-cell {
@@ -1703,6 +1705,18 @@
                 white-space: normal;
                 overflow-wrap: anywhere;
             }
+            .holdings-table th:nth-child(2),
+            .holdings-table td:nth-child(2) {
+                width: 34%;
+            }
+            .holdings-table th:nth-child(3),
+            .holdings-table td:nth-child(3) {
+                width: 24%;
+            }
+            .holdings-table th:nth-child(4),
+            .holdings-table td:nth-child(4) {
+                width: 14%;
+            }
             .accounts-total {
                 font-size: 21px;
             }
@@ -1931,10 +1945,15 @@
                     <span class="setting-value" id="statusText">Not connected</span>
                 </div>
                 <div class="setting-item editable" onclick="openDatasetModal()" title="Click to copy or update shared dataset id">
-                    <span class="setting-label">Shared Dataset ID</span>
+                    <span class="setting-label">Profile Sync ID</span>
                     <span class="setting-value setting-value-wrap editable-value" id="sidebarDatasetId">--</span>
                 </div>
                 <button class="btn btn-primary" id="connectBtn" onclick="connectPlaid()">Connect Account</button>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">History</div>
+                <button class="btn btn-secondary" onclick="openMonthlyExpenseHistoryModal()">📊 Monthly Expenses</button>
             </div>
 
             <div class="sidebar-section">
@@ -1947,8 +1966,8 @@
 
     <div class="modal" id="datasetModal">
         <div class="modal-content">
-            <div class="modal-header">Shared Dataset ID</div>
-            <label class="form-label" for="datasetIdInput">Use this same ID on every device to share one dataset.</label>
+            <div class="modal-header">Profile Sync ID</div>
+            <label class="form-label" for="datasetIdInput">Optional advanced override. By default, your login username automatically maps to your synced profile across devices.</label>
             <input type="text" id="datasetIdInput" class="form-input" placeholder="shared-dataset-id" onkeydown="handleEnterSave(event, saveDatasetId)">
             <div class="btn-group">
                 <button class="btn btn-secondary" onclick="copyDatasetId()">Copy ID</button>
@@ -1956,6 +1975,17 @@
             </div>
             <div class="btn-group">
                 <button class="btn btn--compact" onclick="closeModal('datasetModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="monthlyExpenseHistoryModal">
+        <div class="modal-content">
+            <div class="modal-header">Monthly Expense History</div>
+            <p class="modal-subheader">Captured at the end of each billing cycle and updated as edits are made.</p>
+            <div id="monthlyExpenseHistoryList" class="visibility-list"></div>
+            <div class="btn-group">
+                <button class="btn btn--compact" onclick="closeModal('monthlyExpenseHistoryModal')">Close</button>
             </div>
         </div>
     </div>
@@ -2256,7 +2286,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
-        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], accountVisibility: {}, lastAccountsUpdatedAt: null, customAssets: [] };
+        let state = { income: 0, savings: 0, budgetStartDay: 4, fixedExpenses: [], transactions: [], accounts: [], connectedAccount: null, billingHistory: [], monthlyExpenseHistory: [], accountVisibility: {}, lastAccountsUpdatedAt: null, customAssets: [] };
         let editingFixedExpenseIndex = null;
         let currentReimbursableIndex = null;
         let currentRenameAccountId = null;
@@ -2270,10 +2300,13 @@
         const ACCOUNT_OVERRIDES_KEY = 'budget_account_overrides_v1';
         const TRANSACTION_OVERRIDES_KEY = 'budget_transaction_overrides_v1';
         const PROFILE_ID_KEY = 'budget_profile_id_v1';
+        const MONTHLY_EXPENSE_HISTORY_KEY = 'budget_monthly_expense_history_v1';
         const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
         let remoteSaveTimer = null;
         let isHydratingRemoteState = false;
+        let remoteStateReady = false;
+        let remoteStateLoadFailed = false;
 
         const DEFAULT_SEIA_401K = {
             id: 'custom::seia-401k',
@@ -2282,12 +2315,12 @@
             subtype: 'retirement',
             custodian: 'ADP',
             startBalance: 21068.89,
-            startDate: '2026-02-17',
+            startDate: '2026-01-09',
             baselinePerformancePct: 3.71,
-            baselinePerformanceDate: '2026-02-17',
+            baselinePerformanceDate: '2026-01-09',
             contributionAmount: 365,
             contributionFrequencyDays: 14,
-            nextContributionDate: '2026-02-20',
+            nextContributionDate: '2026-01-09',
             proxySymbol: 'vt.us',
         };
 
@@ -2305,6 +2338,22 @@
 
         function persistBillingHistory() {
             localStorage.setItem(BILLING_HISTORY_KEY, JSON.stringify(state.billingHistory || []));
+        }
+
+        function loadMonthlyExpenseHistory() {
+            try {
+                const raw = localStorage.getItem(MONTHLY_EXPENSE_HISTORY_KEY);
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (error) {
+                console.warn('Unable to parse monthly expense history, resetting memory.', error);
+                return [];
+            }
+        }
+
+        function persistMonthlyExpenseHistory() {
+            localStorage.setItem(MONTHLY_EXPENSE_HISTORY_KEY, JSON.stringify(state.monthlyExpenseHistory || []));
         }
 
         function loadAccountVisibility() {
@@ -3092,9 +3141,9 @@
             const plannedSavings = Math.round(state.savings || 0);
 
             const cycleSpending = state.transactions
-                .filter(t => t.amount < 0)
                 .filter(t => isTransactionInCycle(t, cycle))
-                .reduce((sum, t) => sum + Math.abs(t.amount || 0) - (t.reimbursable || 0), 0);
+                .filter(t => (Number(t.amount) < 0 && (t.account !== 'checking' || t.includeInBudget)) || isCreditRefund(t))
+                .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0);
 
             const additionalLeftover = state.income - totalFixed - plannedSavings - cycleSpending;
             const savingsOccurred = plannedSavings + additionalLeftover;
@@ -3126,7 +3175,23 @@
                 .sort((a, b) => new Date(a.cycleEnd) - new Date(b.cycleEnd))
                 .slice(-3);
 
+            if (!Array.isArray(state.monthlyExpenseHistory)) state.monthlyExpenseHistory = [];
+            const expenseHistoryEntry = {
+                cycleId: metrics.cycleId,
+                label: metrics.label,
+                cycleEnd: metrics.cycleEnd,
+                expenses: metrics.expenses,
+                capturedAt: new Date().toISOString(),
+            };
+            const existingExpenseIndex = state.monthlyExpenseHistory.findIndex((entry) => entry.cycleId === metrics.cycleId);
+            if (existingExpenseIndex >= 0) state.monthlyExpenseHistory[existingExpenseIndex] = expenseHistoryEntry;
+            else state.monthlyExpenseHistory.push(expenseHistoryEntry);
+            state.monthlyExpenseHistory = state.monthlyExpenseHistory
+                .sort((a, b) => new Date(a.cycleEnd) - new Date(b.cycleEnd))
+                .slice(-24);
+
             persistBillingHistory();
+            persistMonthlyExpenseHistory();
         }
 
         function getTrendCycles() {
@@ -3405,6 +3470,14 @@
         function getProfileId() {
             let profileId = localStorage.getItem(PROFILE_ID_KEY);
             if (profileId) return profileId;
+
+            const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
+            if (authenticatedUser) {
+                profileId = `user::${authenticatedUser}`;
+                localStorage.setItem(PROFILE_ID_KEY, profileId);
+                return profileId;
+            }
+
             profileId = (window.crypto && window.crypto.randomUUID)
                 ? window.crypto.randomUUID()
                 : `profile-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -3430,7 +3503,7 @@
             try {
                 if (navigator.clipboard?.writeText) {
                     await navigator.clipboard.writeText(profileId);
-                    alert('Dataset ID copied. Paste this ID on your other device.');
+                    alert('Profile Sync ID copied.');
                 }
             } catch (error) {
                 console.warn('Unable to copy dataset id:', error);
@@ -3441,7 +3514,7 @@
             const input = document.getElementById('datasetIdInput');
             const nextId = String(input?.value || '').trim();
             if (!nextId || nextId.length < 8) {
-                alert('Please enter a valid shared dataset id.');
+                alert('Please enter a valid profile sync id.');
                 return;
             }
             localStorage.setItem(PROFILE_ID_KEY, nextId);
@@ -3461,6 +3534,7 @@
                 budgetStartDay: state.budgetStartDay || 4,
                 fixedExpenses: Array.isArray(state.fixedExpenses) ? state.fixedExpenses : [],
                 billingHistory: Array.isArray(state.billingHistory) ? state.billingHistory : [],
+                monthlyExpenseHistory: Array.isArray(state.monthlyExpenseHistory) ? state.monthlyExpenseHistory : [],
                 accountVisibility: state.accountVisibility || {},
                 accounts: Array.isArray(state.accounts) ? state.accounts : [],
                 transactions: Array.isArray(state.transactions) ? state.transactions : [],
@@ -3473,7 +3547,7 @@
         }
 
         async function persistRemoteState() {
-            if (isHydratingRemoteState) return;
+            if (isHydratingRemoteState || !remoteStateReady) return;
             try {
                 await fetch('/api/save-state', {
                     method: 'POST',
@@ -3490,6 +3564,7 @@
         }
 
         function queueRemoteStateSave() {
+            if (!remoteStateReady) return;
             clearTimeout(remoteSaveTimer);
             remoteSaveTimer = setTimeout(() => {
                 persistRemoteState();
@@ -3514,7 +3589,13 @@
                     }),
                 });
 
-                if (!response.ok) return;
+                if (!response.ok) {
+                    remoteStateReady = false;
+                    remoteStateLoadFailed = true;
+                    return;
+                }
+                remoteStateReady = true;
+                remoteStateLoadFailed = false;
                 const data = await response.json();
                 const remoteState = data?.state;
                 if (!remoteState || typeof remoteState !== 'object') return;
@@ -3533,6 +3614,7 @@
                 if (Number.isFinite(Number(remoteState.budgetStartDay))) state.budgetStartDay = Number(remoteState.budgetStartDay);
                 if (Array.isArray(remoteState.fixedExpenses)) state.fixedExpenses = remoteState.fixedExpenses;
                 if (Array.isArray(remoteState.billingHistory)) state.billingHistory = remoteState.billingHistory;
+                if (Array.isArray(remoteState.monthlyExpenseHistory)) state.monthlyExpenseHistory = remoteState.monthlyExpenseHistory;
                 if (remoteState.accountVisibility && typeof remoteState.accountVisibility === 'object') state.accountVisibility = remoteState.accountVisibility;
                 if (Array.isArray(remoteState.accounts) && remoteState.accounts.length) state.accounts = remoteState.accounts;
                 if (Array.isArray(remoteState.transactions) && remoteState.transactions.length) state.transactions = remoteState.transactions;
@@ -3546,6 +3628,8 @@
                     persistTransactionOverrides(remoteState.transactionOverrides);
                 }
             } catch (error) {
+                remoteStateReady = false;
+                remoteStateLoadFailed = true;
                 console.warn('Failed to load state from Supabase:', error);
             } finally {
                 isHydratingRemoteState = false;
@@ -3662,6 +3746,8 @@
             const value = Number(account.balance || 0);
             if (Math.abs(value) === 0) return null;
             const currentYear = new Date().getFullYear();
+            const subtype = String(account.subtype || '').toLowerCase();
+            if (subtype === 'checking' || subtype === 'savings' || subtype === 'cash') return null;
             const accountTx = state.transactions.filter(tx => tx.accountId === account.id && new Date(tx.date).getFullYear() === currentYear);
             if (!accountTx.length) return null;
             const netInflow = accountTx.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
@@ -3879,7 +3965,22 @@
             overrides[account.id] = { ...(overrides[account.id] || {}), name: nextName };
             persistAccountOverrides(overrides);
             updateUI();
-            closeModal('accountDetailsModal');
+        }
+
+        function openMonthlyExpenseHistoryModal() {
+            const history = Array.isArray(state.monthlyExpenseHistory) ? [...state.monthlyExpenseHistory] : [];
+            const list = document.getElementById('monthlyExpenseHistoryList');
+            if (!list) return;
+
+            if (!history.length) {
+                list.innerHTML = '<div class="empty-state">No completed billing cycles recorded yet.</div>';
+            } else {
+                history.sort((a, b) => new Date(b.cycleEnd) - new Date(a.cycleEnd));
+                list.innerHTML = history.map((entry) => `<div class="visibility-item"><span>${entry.label} (${formatShortDate(entry.cycleEnd)})</span><span>${formatCurrency(entry.expenses)}</span></div>`).join('');
+            }
+
+            document.getElementById('monthlyExpenseHistoryModal').classList.add('active');
+            if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
         }
 
         function openAccountVisibilityModal() {
@@ -4214,8 +4315,8 @@
                 currentAccountDetailsKind = null;
             }
         }
-        function saveIncome() { const value = parseCurrencyInput(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); closeModal('incomeModal'); } }
-        function saveSavings() { const value = parseCurrencyInput(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); closeModal('savingsModal'); } }
+        function saveIncome() { const value = parseCurrencyInput(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); } }
+        function saveSavings() { const value = parseCurrencyInput(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); } }
         function saveFixedExpense() {
             const name = document.getElementById('fixedNameInput').value.trim();
             const amount = parseCurrencyInput(document.getElementById('fixedAmountInput').value) || 0;
@@ -4243,7 +4344,7 @@
             updateUI();
             closeModal('fixedModal');
         }
-        function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 31) { state.budgetStartDay = day; updateUI(); closeModal('budgetPeriodModal'); } }
+        function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 31) { state.budgetStartDay = day; updateUI(); } }
 
         function saveReimbursable() {
             if (currentReimbursableIndex !== null) {
@@ -4610,9 +4711,14 @@
         async function checkConnection() {
             plaidItems = loadPlaidItems();
             state.billingHistory = loadBillingHistory();
+            state.monthlyExpenseHistory = loadMonthlyExpenseHistory();
             state.accountVisibility = loadAccountVisibility();
 
             await loadRemoteState();
+
+            if (remoteStateLoadFailed) {
+                setConnectionState('Sync unavailable');
+            }
 
             if (plaidItems.length) {
                 setConnectionState(getConnectionLabel());
