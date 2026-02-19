@@ -2407,9 +2407,13 @@
         let remoteStateLoadFailed = false;
         let localSnapshotUpdatedAt = null;
 
+        function getUserScopedStorageKey(baseKey) {
+            return `${baseKey}::${getProfileId()}`;
+        }
+
         function loadBillingHistory() {
             try {
-                const raw = localStorage.getItem(BILLING_HISTORY_KEY);
+                const raw = localStorage.getItem(getUserScopedStorageKey(BILLING_HISTORY_KEY));
                 if (!raw) return [];
                 const parsed = JSON.parse(raw);
                 return Array.isArray(parsed) ? parsed : [];
@@ -2420,12 +2424,12 @@
         }
 
         function persistBillingHistory() {
-            localStorage.setItem(BILLING_HISTORY_KEY, JSON.stringify(state.billingHistory || []));
+            localStorage.setItem(getUserScopedStorageKey(BILLING_HISTORY_KEY), JSON.stringify(state.billingHistory || []));
         }
 
         function loadMonthlyExpenseHistory() {
             try {
-                const raw = localStorage.getItem(MONTHLY_EXPENSE_HISTORY_KEY);
+                const raw = localStorage.getItem(getUserScopedStorageKey(MONTHLY_EXPENSE_HISTORY_KEY));
                 if (!raw) return [];
                 const parsed = JSON.parse(raw);
                 return Array.isArray(parsed) ? parsed : [];
@@ -2436,12 +2440,12 @@
         }
 
         function persistMonthlyExpenseHistory() {
-            localStorage.setItem(MONTHLY_EXPENSE_HISTORY_KEY, JSON.stringify(state.monthlyExpenseHistory || []));
+            localStorage.setItem(getUserScopedStorageKey(MONTHLY_EXPENSE_HISTORY_KEY), JSON.stringify(state.monthlyExpenseHistory || []));
         }
 
         function loadAccountVisibility() {
             try {
-                const raw = localStorage.getItem(ACCOUNT_VISIBILITY_KEY);
+                const raw = localStorage.getItem(getUserScopedStorageKey(ACCOUNT_VISIBILITY_KEY));
                 if (!raw) return {};
                 const parsed = JSON.parse(raw);
                 return parsed && typeof parsed === 'object' ? parsed : {};
@@ -2452,12 +2456,12 @@
         }
 
         function persistAccountVisibility() {
-            localStorage.setItem(ACCOUNT_VISIBILITY_KEY, JSON.stringify(state.accountVisibility || {}));
+            localStorage.setItem(getUserScopedStorageKey(ACCOUNT_VISIBILITY_KEY), JSON.stringify(state.accountVisibility || {}));
         }
 
         function loadAccountOverrides() {
             try {
-                const raw = localStorage.getItem(ACCOUNT_OVERRIDES_KEY);
+                const raw = localStorage.getItem(getUserScopedStorageKey(ACCOUNT_OVERRIDES_KEY));
                 if (!raw) return {};
                 const parsed = JSON.parse(raw);
                 return parsed && typeof parsed === 'object' ? parsed : {};
@@ -2468,12 +2472,12 @@
         }
 
         function persistAccountOverrides(overrides) {
-            localStorage.setItem(ACCOUNT_OVERRIDES_KEY, JSON.stringify(overrides || {}));
+            localStorage.setItem(getUserScopedStorageKey(ACCOUNT_OVERRIDES_KEY), JSON.stringify(overrides || {}));
         }
 
         function loadTransactionOverrides() {
             try {
-                const raw = localStorage.getItem(TRANSACTION_OVERRIDES_KEY);
+                const raw = localStorage.getItem(getUserScopedStorageKey(TRANSACTION_OVERRIDES_KEY));
                 if (!raw) return {};
                 const parsed = JSON.parse(raw);
                 return parsed && typeof parsed === 'object' ? parsed : {};
@@ -2484,12 +2488,12 @@
         }
 
         function persistTransactionOverrides(overrides) {
-            localStorage.setItem(TRANSACTION_OVERRIDES_KEY, JSON.stringify(overrides || {}));
+            localStorage.setItem(getUserScopedStorageKey(TRANSACTION_OVERRIDES_KEY), JSON.stringify(overrides || {}));
         }
 
         function loadLocalStateSnapshot() {
             try {
-                const raw = localStorage.getItem(LOCAL_STATE_SNAPSHOT_KEY);
+                const raw = localStorage.getItem(getUserScopedStorageKey(LOCAL_STATE_SNAPSHOT_KEY));
                 if (!raw) return null;
                 const parsed = JSON.parse(raw);
                 return parsed && typeof parsed === 'object' ? parsed : null;
@@ -2511,7 +2515,7 @@
                 customAssets: Array.isArray(state.customAssets) ? state.customAssets : [],
                 snapshotUpdatedAt: nowIso,
             };
-            localStorage.setItem(LOCAL_STATE_SNAPSHOT_KEY, JSON.stringify(snapshot));
+            localStorage.setItem(getUserScopedStorageKey(LOCAL_STATE_SNAPSHOT_KEY), JSON.stringify(snapshot));
         }
 
         function applyStateSnapshot(snapshot) {
@@ -3716,8 +3720,8 @@
         }
 
         function getProfileId() {
-            const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
-            const authenticatedUserId = String(localStorage.getItem('budgetTrackerUserId') || '').trim();
+            const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || sessionStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
+            const authenticatedUserId = String(localStorage.getItem('budgetTrackerUserId') || sessionStorage.getItem('budgetTrackerUserId') || '').trim();
             if (authenticatedUser || authenticatedUserId) {
                 const stableIdentity = authenticatedUser || authenticatedUserId;
                 const userScopedId = `user::${stableIdentity}`;
@@ -4876,15 +4880,7 @@
                 console.error('Error reading Plaid items from storage:', error);
             }
 
-            const legacyAccessToken = localStorage.getItem('plaid_access_token');
-            if (!legacyAccessToken) return [];
-
-            return [{
-                accessToken: legacyAccessToken,
-                itemId: localStorage.getItem('plaid_item_id') || '',
-                institutionName: localStorage.getItem('plaid_institution') || 'Linked institution',
-                linkedAt: new Date().toISOString(),
-            }];
+            return [];
         }
 
         function persistPlaidItems(items) {
