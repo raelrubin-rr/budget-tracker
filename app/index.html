@@ -3825,7 +3825,14 @@
 
         function isRrScopedProfile(profileId = getProfileId()) {
             const normalized = String(profileId || '').trim().toLowerCase();
-            return normalized === 'user::rr' || normalized === 'user:rr';
+            const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || sessionStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
+            if (authenticatedUser === 'rr') return true;
+
+            if (normalized === 'user::rr' || normalized === 'user:rr') return true;
+
+            const normalizedSegments = normalized.split(':').filter(Boolean);
+            if (!normalizedSegments.length) return false;
+            return normalizedSegments[normalizedSegments.length - 1] === 'rr';
         }
 
         function isRrOnlyCustomAsset(asset) {
@@ -4174,6 +4181,22 @@
                 if (Number.isFinite(Number(account?.estimationMeta?.ytdPerformancePct))) return Number(account.estimationMeta.ytdPerformancePct);
                 if (Number.isFinite(Number(account?.estimationMeta?.performancePct))) return Number(account.estimationMeta.performancePct);
                 return null;
+            }
+
+            const accountName = String(account?.name || '').trim().toLowerCase();
+            const isSeia401k = accountName.includes('seia') && accountName.includes('401k');
+            if (isSeia401k && isRrScopedProfile()) {
+                const matchingCustomAccount = (state.accounts || []).find((candidate) => {
+                    if (!candidate?.customAsset) return false;
+                    const customName = String(candidate?.name || '').trim().toLowerCase();
+                    return customName.includes('seia') && customName.includes('401k');
+                });
+                if (matchingCustomAccount) {
+                    const customYtd = Number(matchingCustomAccount?.estimationMeta?.ytdPerformancePct);
+                    if (Number.isFinite(customYtd)) return customYtd;
+                    const customPerformance = Number(matchingCustomAccount?.estimationMeta?.performancePct);
+                    if (Number.isFinite(customPerformance)) return customPerformance;
+                }
             }
 
             const plaidYtd = Number(account?.ytdPerformancePct);
