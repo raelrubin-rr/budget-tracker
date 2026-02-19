@@ -2542,6 +2542,30 @@
             return Number.isFinite(parsed) ? parsed : 0;
         }
 
+        function hasMeaningfulBudgetSettings(payload) {
+            if (!payload || typeof payload !== 'object') return false;
+            const income = Number(payload.income || 0);
+            const savings = Number(payload.savings || 0);
+            const fixedExpenses = Array.isArray(payload.fixedExpenses) ? payload.fixedExpenses : [];
+            return income > 0 || savings > 0 || fixedExpenses.length > 0;
+        }
+
+        function hasAccountVisibilityPreferences(payload) {
+            if (!payload || typeof payload !== 'object') return false;
+            const visibility = payload.accountVisibility;
+            return !!(visibility && typeof visibility === 'object' && Object.keys(visibility).length);
+        }
+
+        function getTransactionIdentityKey(tx) {
+            if (!tx || typeof tx !== 'object') return '';
+            if (tx.id) return String(tx.id);
+            const accountId = tx.sourceAccountId || tx.accountId || 'account';
+            const name = String(tx.name || '').trim();
+            const date = String(tx.date || '').trim();
+            const amount = Number(tx.amount || 0);
+            return `${accountId}::${name}::${date}::${amount}`;
+        }
+
         function getAccountVisibility(accountId) {
             const prefs = (state.accountVisibility && state.accountVisibility[accountId]) || {};
             return {
@@ -3790,15 +3814,19 @@
         }
 
         function getProfileId() {
-            let profileId = localStorage.getItem(PROFILE_ID_KEY);
-            if (profileId) return profileId;
-
             const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
             if (authenticatedUser) {
-                profileId = `user::${authenticatedUser}`;
-                localStorage.setItem(PROFILE_ID_KEY, profileId);
-                return profileId;
+                const userScopedId = `user::${authenticatedUser}`;
+                const currentId = String(localStorage.getItem(PROFILE_ID_KEY) || '').trim();
+                if (!currentId || currentId.startsWith('user::')) {
+                    localStorage.setItem(PROFILE_ID_KEY, userScopedId);
+                    return userScopedId;
+                }
+                return currentId;
             }
+
+            let profileId = localStorage.getItem(PROFILE_ID_KEY);
+            if (profileId) return profileId;
 
             profileId = (window.crypto && window.crypto.randomUUID)
                 ? window.crypto.randomUUID()
@@ -3934,7 +3962,12 @@
 
                 const localSnapshotTs = getSnapshotTimestampValue(localSnapshotUpdatedAt);
                 const remoteSnapshotTs = getSnapshotTimestampValue(remoteState.snapshotUpdatedAt);
-                const shouldApplyRemoteSettings = remoteSnapshotTs >= localSnapshotTs;
+                const localHasSettings = hasMeaningfulBudgetSettings(state);
+                const remoteHasSettings = hasMeaningfulBudgetSettings(remoteState);
+                const shouldApplyRemoteSettings = remoteSnapshotTs >= localSnapshotTs || (!localHasSettings && remoteHasSettings);
+                const localHasVisibilityPrefs = hasAccountVisibilityPreferences(state);
+                const remoteHasVisibilityPrefs = hasAccountVisibilityPreferences(remoteState);
+                const shouldApplyRemoteVisibility = remoteSnapshotTs >= localSnapshotTs || (!localHasVisibilityPrefs && remoteHasVisibilityPrefs);
 
                 if (shouldApplyRemoteSettings && Number.isFinite(Number(remoteState.income))) state.income = Number(remoteState.income);
                 if (shouldApplyRemoteSettings && Number.isFinite(Number(remoteState.savings))) state.savings = Number(remoteState.savings);
@@ -3942,7 +3975,7 @@
                 if (shouldApplyRemoteSettings && Array.isArray(remoteState.fixedExpenses)) state.fixedExpenses = remoteState.fixedExpenses;
                 if (Array.isArray(remoteState.billingHistory)) state.billingHistory = remoteState.billingHistory;
                 if (Array.isArray(remoteState.monthlyExpenseHistory)) state.monthlyExpenseHistory = remoteState.monthlyExpenseHistory;
-                if (shouldApplyRemoteSettings && remoteState.accountVisibility && typeof remoteState.accountVisibility === 'object') state.accountVisibility = remoteState.accountVisibility;
+                if (shouldApplyRemoteVisibility && remoteState.accountVisibility && typeof remoteState.accountVisibility === 'object') state.accountVisibility = remoteState.accountVisibility;
                 if (Array.isArray(remoteState.accounts) && remoteState.accounts.length) state.accounts = remoteState.accounts;
                 if (Array.isArray(remoteState.transactions) && remoteState.transactions.length) state.transactions = remoteState.transactions;
                 if (remoteState.lastAccountsUpdatedAt) state.lastAccountsUpdatedAt = remoteState.lastAccountsUpdatedAt;
@@ -4440,9 +4473,21 @@
             const orderedTransactions = sortTransactionsForDisplay(transactions);
             list.innerHTML = orderedTransactions.map(tx => {
                 const actualIndex = state.transactions.findIndex(t => t.id === tx.id);
+                const actualTx = actualIndex >= 0 ? state.transactions[actualIndex] : tx;
+                const txIdentityKey = getTransactionIdentityKey(actualTx);
                 const isPositive = tx.amount > 0;
-                const isLinked = state.transactions.some(t => t.linkedDeposit === actualIndex);
-                const linkedDeposit = tx.linkedDeposit !== null && tx.linkedDeposit !== undefined ? state.transactions[tx.linkedDeposit] : null;
+                const linkedDeposit = state.transactions.find((candidate, candidateIndex) => {
+                    if (!actualTx) return false;
+                    if (actualTx.linkedDepositId && candidate.id === actualTx.linkedDepositId) return true;
+                    if (actualTx.linkedDeposit !== null && actualTx.linkedDeposit !== undefined && candidateIndex === actualTx.linkedDeposit) return true;
+                    return false;
+                }) || null;
+                const isLinked = state.transactions.some((candidate) => {
+                    if (!candidate) return false;
+                    if (candidate.linkedDepositId && tx.id && candidate.linkedDepositId === tx.id) return true;
+                    if (candidate.linkedDeposit !== null && candidate.linkedDeposit !== undefined && candidate.linkedDeposit === actualIndex) return true;
+                    return getTransactionIdentityKey(candidate) === txIdentityKey && !!candidate.linkedDepositId;
+                });
                 const hasReimbursement = tx.reimbursable && tx.reimbursable > 0;
                 
                 const linkedIcon = (linkedDeposit || isLinked) ? '<span class="badge">🔗</span>' : '';
@@ -4616,10 +4661,16 @@
             document.getElementById('reimbursableTransactionName').textContent = `${displayName} – $${Math.round(Math.abs(tx.amount)).toLocaleString()}`;
             document.getElementById('categorySelect').value = tx.category || autoCategorize(tx.name);
             const depositSelect = document.getElementById('linkedDepositSelect');
-            const checkingDeposits = state.transactions.map((t, idx) => ({ ...t, originalIndex: idx })).filter(t => t.account === 'checking' && t.amount > 0);
-            depositSelect.innerHTML = '<option value="">None</option>' + checkingDeposits.map(dep => `<option value="${dep.originalIndex}">${dep.name} – $${Math.round(dep.amount).toLocaleString()}</option>`).join('');
-            if (tx.linkedDeposit !== null && tx.linkedDeposit !== undefined) {
-                depositSelect.value = tx.linkedDeposit;
+            const checkingDeposits = state.transactions
+                .map((t, idx) => ({ ...t, originalIndex: idx }))
+                .filter(t => t.account === 'checking' && t.amount > 0)
+                .map((dep) => ({ ...dep, depositKey: dep.id || getTransactionIdentityKey(dep) }));
+            depositSelect.innerHTML = '<option value="">None</option>' + checkingDeposits.map(dep => `<option value="${dep.depositKey}">${dep.name} – $${Math.round(dep.amount).toLocaleString()}</option>`).join('');
+            const linkedDepositKey = tx.linkedDepositId || (tx.linkedDeposit !== null && tx.linkedDeposit !== undefined && state.transactions[tx.linkedDeposit]
+                ? (state.transactions[tx.linkedDeposit].id || getTransactionIdentityKey(state.transactions[tx.linkedDeposit]))
+                : '');
+            if (linkedDepositKey) {
+                depositSelect.value = linkedDepositKey;
                 document.getElementById('reimbursableAmountInput').value = '';
                 document.getElementById('manualAmountGroup').style.display = 'none';
             } else {
@@ -4711,7 +4762,7 @@
 
         function saveReimbursable() {
             if (currentReimbursableIndex !== null) {
-                const linkedDepositIndex = document.getElementById('linkedDepositSelect').value;
+                const linkedDepositKey = document.getElementById('linkedDepositSelect').value;
                 const category = document.getElementById('categorySelect').value;
                 const splitPeople = parseInt(document.getElementById('splitPeopleInput').value, 10);
                 const targetTx = state.transactions[currentReimbursableIndex];
@@ -4721,23 +4772,31 @@
 
                 if (document.getElementById('excludeTransactionToggle')?.checked) {
                     targetTx.linkedDeposit = null;
+                    targetTx.linkedDepositId = null;
                     targetTx.reimbursable = maxReimbursable;
-                } else if (linkedDepositIndex) {
-                    const depositAmount = Math.max(0, state.transactions[parseInt(linkedDepositIndex)].amount || 0);
-                    targetTx.linkedDeposit = parseInt(linkedDepositIndex);
+                } else if (linkedDepositKey) {
+                    const linkedDepositTx = state.transactions.find((candidate) => {
+                        const candidateKey = candidate.id || getTransactionIdentityKey(candidate);
+                        return candidateKey === linkedDepositKey;
+                    });
+                    const depositAmount = Math.max(0, linkedDepositTx?.amount || 0);
+                    targetTx.linkedDeposit = null;
+                    targetTx.linkedDepositId = linkedDepositTx?.id || linkedDepositKey;
                     targetTx.reimbursable = Math.min(maxReimbursable, depositAmount);
                 } else {
                     const manualAmount = parseFloat(document.getElementById('reimbursableAmountInput').value) || 0;
                     targetTx.reimbursable = Math.min(maxReimbursable, Math.max(0, manualAmount));
                     targetTx.linkedDeposit = null;
+                    targetTx.linkedDepositId = null;
                 }
                 const overrides = loadTransactionOverrides();
-                const txId = targetTx.id || `${targetTx.accountId || 'account'}::${targetTx.name}::${targetTx.date}`;
+                const txId = getTransactionIdentityKey(targetTx);
                 overrides[txId] = {
                     ...(overrides[txId] || {}),
                     category: targetTx.category,
                     reimbursable: targetTx.reimbursable,
                     linkedDeposit: targetTx.linkedDeposit,
+                    linkedDepositId: targetTx.linkedDepositId,
                     splitPeople: targetTx.splitPeople,
                     displayName: targetTx.displayName || sanitizeTransactionLabel(targetTx.name),
                     name: targetTx.name,
@@ -5045,7 +5104,8 @@
                     };
                 });
                 state.transactions = mergedTransactions.map((tx) => {
-                    const override = transactionOverrides[tx.id] || {};
+                    const identityKey = getTransactionIdentityKey(tx);
+                    const override = transactionOverrides[tx.id] || transactionOverrides[identityKey] || {};
                     return normalizeTransactionCategory({
                         ...tx,
                         name: override.name || tx.name,
@@ -5053,6 +5113,7 @@
                         category: override.category || tx.category,
                         reimbursable: override.reimbursable ?? tx.reimbursable,
                         linkedDeposit: override.linkedDeposit ?? tx.linkedDeposit,
+                        linkedDepositId: override.linkedDepositId || null,
                         includeInBudget: typeof override.includeInBudget === 'boolean' ? override.includeInBudget : tx.includeInBudget,
                         splitPeople: override.splitPeople ?? tx.splitPeople,
                     });
