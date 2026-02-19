@@ -959,6 +959,32 @@
             gap: 12px;
         }
 
+
+        .fixed-expense-actions {
+            display: inline-flex;
+            gap: 8px;
+        }
+
+        .fixed-expense-action {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .fixed-expense-action:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+        }
+
         .fixed-expense-value {
             min-width: 110px;
             text-align: right;
@@ -1402,14 +1428,37 @@
             line-height: 1.35;
         }
 
+        .exclude-transaction-section {
+            margin-top: 16px;
+        }
+
         .exclude-transaction-toggle {
-            margin-top: 10px;
+            width: 100%;
             display: flex;
-            gap: 8px;
+            gap: 10px;
             align-items: center;
-            font-size: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
             color: var(--text-secondary);
+            padding: 12px 14px;
+            font-size: 12px;
             font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: border-color 0.2s, color 0.2s, background 0.2s;
+        }
+
+        .exclude-transaction-toggle:hover {
+            border-color: var(--text-secondary);
+            color: var(--text-primary);
+        }
+
+        .exclude-transaction-toggle input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--red);
+            flex: 0 0 auto;
         }
 
         .modal-subheader {
@@ -1800,6 +1849,11 @@
             .account-name {
                 font-size: 14px;
             }
+            .fixed-expense-action {
+                width: 34px;
+                height: 34px;
+                font-size: 15px;
+            }
             .account-meta {
                 font-size: 7.75px;
                 line-height: 1.35;
@@ -2000,6 +2054,11 @@
             }
             .account-name {
                 font-size: 14px;
+            }
+            .fixed-expense-action {
+                width: 34px;
+                height: 34px;
+                font-size: 15px;
             }
             .account-meta {
                 font-size: 7.75px;
@@ -2338,11 +2397,13 @@
                         </div>
                     </div>
                     <div class="split-preview" id="splitPreviewText">Enter people count to auto-calculate reimbursement share.</div>
-                    <label class="exclude-transaction-toggle">
-                        <input type="checkbox" id="excludeTransactionToggle">
-                        <span>Do not include this transaction</span>
-                    </label>
                 </div>
+            </div>
+            <div class="exclude-transaction-section">
+                <label class="exclude-transaction-toggle">
+                    <input type="checkbox" id="excludeTransactionToggle">
+                    <span>Do not include this transaction</span>
+                </label>
             </div>
             <div class="btn-group">
                 <button class="btn" onclick="closeModal('reimbursableModal')">Cancel</button>
@@ -4018,10 +4079,14 @@
             const sidebarFixedList = document.getElementById('sidebarFixedList');
             if (state.fixedExpenses.length > 0) {
                 sidebarFixedList.innerHTML = state.fixedExpenses.map((exp, index) => `
-                    <div class="setting-item editable" onclick="openFixedModal(${index})" title="Click to edit fixed expense">
+                    <div class="setting-item editable" onclick="openFixedModal(${index})" title="Tap to edit fixed expense">
                         <span class="setting-label">${exp.name}</span>
                         <div class="fixed-expense-meta">
                             <span class="setting-value fixed-expense-value editable-value">$${Math.round(exp.amount).toLocaleString()}</span>
+                            <div class="fixed-expense-actions">
+                                <button type="button" class="fixed-expense-action" onclick="event.stopPropagation(); openFixedModal(${index});" aria-label="Edit ${exp.name}">✎</button>
+                                <button type="button" class="fixed-expense-action" onclick="event.stopPropagation(); removeFixedExpenseByIndex(${index});" aria-label="Remove ${exp.name}">×</button>
+                            </div>
                         </div>
                     </div>
                 `).join('');
@@ -4591,6 +4656,7 @@
         function openIncomeModal() { document.getElementById('incomeInput').value = formatCurrencyInputValue(state.income); document.getElementById('incomeModal').classList.add('active'); }
         function openSavingsModal() { document.getElementById('savingsInput').value = formatCurrencyInputValue(state.savings); document.getElementById('savingsModal').classList.add('active'); }
         function openFixedModal(index = null) {
+            if (window.innerWidth <= 768) toggleSidebar(true);
             editingFixedExpenseIndex = index;
             const nameInput = document.getElementById('fixedNameInput');
             const amountInput = document.getElementById('fixedAmountInput');
@@ -4611,6 +4677,7 @@
                 deleteBtn.style.display = 'none';
             }
             document.getElementById('fixedModal').classList.add('active');
+            setTimeout(() => nameInput.focus(), 50);
         }
         function openBudgetPeriodModal() { document.getElementById('budgetDayInput').value = state.budgetStartDay || 4; document.getElementById('budgetPeriodModal').classList.add('active'); }
 
@@ -4628,6 +4695,10 @@
             const next = Math.max(2, current + delta);
             input.value = next;
             input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        function isExcludeTransactionEnabled() {
+            return !!document.getElementById('excludeTransactionToggle')?.checked;
         }
 
         function openReimbursableModal(index) {
@@ -4673,7 +4744,7 @@
 
             splitPeopleInput.oninput = () => {
                 updateSplitPreview();
-                if (depositSelect.value || excludeToggle.checked) return;
+                if (depositSelect.value || isExcludeTransactionEnabled()) return;
                 const people = parseInt(splitPeopleInput.value, 10);
                 if (people && people >= 2) {
                     document.getElementById('reimbursableAmountInput').value = (Math.abs(tx.amount || 0) - (Math.abs(tx.amount || 0) / people)).toFixed(2);
@@ -4734,6 +4805,13 @@
             updateUI();
             closeModal('fixedModal');
         }
+
+        function removeFixedExpenseByIndex(index) {
+            if (!state.fixedExpenses[index]) return;
+            state.fixedExpenses.splice(index, 1);
+            if (editingFixedExpenseIndex === index) editingFixedExpenseIndex = null;
+            updateUI();
+        }
         function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 31) { state.budgetStartDay = day; updateUI(); closeModal('budgetPeriodModal'); } }
 
         function saveReimbursable() {
@@ -4746,7 +4824,7 @@
                 targetTx.category = category;
                 targetTx.splitPeople = splitPeople >= 2 ? splitPeople : null;
 
-                if (document.getElementById('excludeTransactionToggle')?.checked) {
+                if (isExcludeTransactionEnabled()) {
                     targetTx.linkedDeposit = null;
                     targetTx.linkedDepositId = null;
                     targetTx.reimbursable = maxReimbursable;
@@ -4805,10 +4883,10 @@
             closeModal('renameAccountModal');
         }
 
-        function toggleSidebar() {
+        function toggleSidebar(forceClose = false) {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
-            if (sidebar.classList.contains('open')) {
+            if (forceClose || sidebar.classList.contains('open')) {
                 sidebar.classList.remove('open');
                 overlay.classList.remove('active');
             } else {
