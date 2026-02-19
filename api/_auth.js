@@ -11,9 +11,17 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, storedHash) {
-  const [salt, expected] = String(storedHash || '').split(':');
+  const normalizedPassword = String(password || '');
+  const normalizedStoredHash = String(storedHash || '');
+
+  // Backward compatibility for any legacy plaintext passwords stored before hashing was added.
+  if (!normalizedStoredHash.includes(':')) {
+    return normalizedStoredHash.length > 0 && normalizedStoredHash === normalizedPassword;
+  }
+
+  const [salt, expected] = normalizedStoredHash.split(':');
   if (!salt || !expected) return false;
-  const actual = crypto.scryptSync(String(password || ''), salt, 64).toString('hex');
+  const actual = crypto.scryptSync(normalizedPassword, salt, 64).toString('hex');
   return crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'));
 }
 

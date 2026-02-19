@@ -23,6 +23,13 @@ body {
   line-height: 1.6;
 }
 
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
 .page {
   min-height: 100vh;
   display: flex;
@@ -123,6 +130,10 @@ a {
   background: transparent;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
+}
+
+.auth-actions {
+  margin-bottom: 16px;
 }
 
 .footer {
