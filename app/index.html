@@ -2611,7 +2611,7 @@
             if (Number.isFinite(Number(snapshot.budgetStartDay))) state.budgetStartDay = Number(snapshot.budgetStartDay);
             if (Array.isArray(snapshot.fixedExpenses)) state.fixedExpenses = snapshot.fixedExpenses;
             if (snapshot.accountVisibility && typeof snapshot.accountVisibility === 'object') state.accountVisibility = snapshot.accountVisibility;
-            if (Array.isArray(snapshot.customAssets)) state.customAssets = snapshot.customAssets;
+            if (Array.isArray(snapshot.customAssets)) state.customAssets = getScopedCustomAssets(snapshot.customAssets);
             const snapshotTime = Date.parse(snapshot.snapshotUpdatedAt || '');
             if (Number.isFinite(snapshotTime)) localSnapshotUpdatedAt = snapshot.snapshotUpdatedAt;
         }
@@ -2967,7 +2967,7 @@
 
         function buildCustomAssetCashflowSummary(customAsset, todayIso) {
             const contributionAmount = Number(customAsset.contributionAmount || 0);
-            const contributionAnchorDate = customAsset.nextContributionDate;
+            const contributionAnchorDate = customAsset.contributionStartDate || customAsset.nextContributionDate;
             const contributionDates = buildRecurringEventDates(
                 contributionAnchorDate,
                 customAsset.contributionFrequencyDays || 14,
@@ -3822,6 +3822,23 @@
             return profileId;
         }
 
+
+        function isRrScopedProfile(profileId = getProfileId()) {
+            const normalized = String(profileId || '').trim().toLowerCase();
+            return normalized === 'user::rr' || normalized === 'user:rr';
+        }
+
+        function isRrOnlyCustomAsset(asset) {
+            const name = String(asset?.name || '').trim().toLowerCase();
+            return name.includes('seia') && name.includes('401k');
+        }
+
+        function getScopedCustomAssets(customAssets = []) {
+            if (!Array.isArray(customAssets)) return [];
+            if (isRrScopedProfile()) return customAssets;
+            return customAssets.filter((asset) => !isRrOnlyCustomAsset(asset));
+        }
+
         function formatDatasetId(profileId) {
             const raw = String(profileId || '').trim();
             if (!raw) return '--';
@@ -4015,7 +4032,7 @@
                 if (Array.isArray(remoteState.accounts) && remoteState.accounts.length) state.accounts = remoteState.accounts;
                 if (Array.isArray(remoteState.transactions) && remoteState.transactions.length) state.transactions = remoteState.transactions;
                 if (remoteState.lastAccountsUpdatedAt) state.lastAccountsUpdatedAt = remoteState.lastAccountsUpdatedAt;
-                if (shouldApplyRemoteSettings && Array.isArray(remoteState.customAssets)) state.customAssets = remoteState.customAssets;
+                if (shouldApplyRemoteSettings && Array.isArray(remoteState.customAssets)) state.customAssets = getScopedCustomAssets(remoteState.customAssets);
                 if (shouldApplyRemoteSettings && remoteSnapshotTs > 0) localSnapshotUpdatedAt = remoteState.snapshotUpdatedAt;
                 persistLocalStateSnapshot();
 
@@ -4173,6 +4190,36 @@
                 termMonths: Number(account.termMonths || 0),
                 nextPaymentDate: account.nextPaymentDate || null,
                 paymentAmount: Number.isFinite(parsedPaymentAmount) ? parsedPaymentAmount : null,
+            };
+        }
+
+        function parseOptionalNumber(value) {
+            if (value === null || value === undefined || value === '') return undefined;
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : undefined;
+        }
+
+        function parseOptionalIsoDate(value) {
+            if (typeof value !== 'string' || !value.trim()) return undefined;
+            const parsed = parseIsoDateToUtc(value.trim());
+            return parsed ? formatDateToIso(parsed) : undefined;
+        }
+
+        function applyAccountOverride(account, override = {}) {
+            const isRrProfile = isRrScopedProfile();
+            const accountName = String(account?.name || '').toLowerCase();
+            const isRrOnlyFirstTechLiability = accountName.includes('first tech') && accountName.includes('student');
+            const allowLiabilityFieldOverrides = isRrProfile || !isRrOnlyFirstTechLiability;
+            const interestRateOverride = allowLiabilityFieldOverrides ? parseOptionalNumber(override.interestRate) : undefined;
+            const paymentAmountOverride = allowLiabilityFieldOverrides ? parseOptionalNumber(override.paymentAmount) : undefined;
+            const nextPaymentDateOverride = allowLiabilityFieldOverrides ? parseOptionalIsoDate(override.nextPaymentDate) : undefined;
+
+            return {
+                ...account,
+                name: override.name || account.name,
+                interestRate: interestRateOverride !== undefined ? interestRateOverride : account.interestRate,
+                paymentAmount: paymentAmountOverride !== undefined ? paymentAmountOverride : account.paymentAmount,
+                nextPaymentDate: nextPaymentDateOverride !== undefined ? nextPaymentDateOverride : account.nextPaymentDate,
             };
         }
 
@@ -4794,6 +4841,13 @@
         }
         function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 31) { state.budgetStartDay = day; updateUI(); closeModal('budgetPeriodModal'); } }
 
+        function handleBudgetDayWheel(event) {
+            const input = document.getElementById('budgetDayInput');
+            if (!input || document.activeElement !== input) return;
+            event.preventDefault();
+            adjustBudgetDay(event.deltaY > 0 ? -1 : 1);
+        }
+
         function saveReimbursable() {
             if (currentReimbursableIndex !== null) {
                 const linkedDepositKey = document.getElementById('linkedDepositSelect').value;
@@ -5127,13 +5181,7 @@
                 const accountOverrides = loadAccountOverrides();
                 const transactionOverrides = loadTransactionOverrides();
 
-                state.accounts = (await upsertEstimatedCustomAccounts(mergedAccounts)).map((acc) => {
-                    const override = accountOverrides[acc.id] || {};
-                    return {
-                        ...acc,
-                        name: override.name || acc.name,
-                    };
-                });
+                state.accounts = (await upsertEstimatedCustomAccounts(mergedAccounts)).map((acc) => applyAccountOverride(acc, accountOverrides[acc.id] || {}));
                 state.transactions = mergedTransactions.map((tx) => {
                     const identityKey = getTransactionIdentityKey(tx);
                     const fallbackKey = getTransactionFallbackKey(tx);
@@ -5194,6 +5242,9 @@
             if (remoteStateReady) persistRemoteState();
         });
         checkConnection();
+
+        const budgetDayInput = document.getElementById('budgetDayInput');
+        if (budgetDayInput) budgetDayInput.addEventListener('wheel', handleBudgetDayWheel, { passive: false });
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('active');
