@@ -23,7 +23,8 @@ module.exports = async (req, res) => {
         client_user_id: 'user-' + Date.now(),
       },
       client_name: 'Raelyboy',
-      products: ['transactions', 'liabilities', 'investments'],
+      products: ['transactions'],
+      optional_products: ['liabilities', 'investments'],
       country_codes: ['US'],
       language: 'en',
     };

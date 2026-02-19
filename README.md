@@ -24,6 +24,7 @@ If you see `invalid client_id or secret provided` while creating a link token:
 3. If using production keys, make sure `PLAID_ENV=production`.
 4. Re-save the variables and trigger a fresh deployment so runtime picks up new values.
 5. Check for hidden spaces/newlines in copied secrets.
+6. Some institutions may not support every Plaid product; this app requests `transactions` as required and `liabilities`/`investments` as optional to avoid unnecessary institution filtering in Link.
 
 ## Structure
 - index.html - Main app
