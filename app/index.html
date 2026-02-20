@@ -2626,7 +2626,8 @@
             const income = Number(payload.income || 0);
             const savings = Number(payload.savings || 0);
             const fixedExpenses = Array.isArray(payload.fixedExpenses) ? payload.fixedExpenses : [];
-            return income > 0 || savings > 0 || fixedExpenses.length > 0;
+            const customAssets = Array.isArray(payload.customAssets) ? getScopedCustomAssets(payload.customAssets) : [];
+            return income > 0 || savings > 0 || fixedExpenses.length > 0 || customAssets.length > 0;
         }
 
         function hasAccountVisibilityPreferences(payload) {
@@ -4030,6 +4031,9 @@
                 const localHasVisibilityPrefs = hasAccountVisibilityPreferences(state);
                 const remoteHasVisibilityPrefs = hasAccountVisibilityPreferences(remoteState);
                 const shouldApplyRemoteVisibility = remoteSnapshotTs >= localSnapshotTs || (!localHasVisibilityPrefs && remoteHasVisibilityPrefs);
+                const localCustomAssets = Array.isArray(state.customAssets) ? state.customAssets : [];
+                const remoteCustomAssets = Array.isArray(remoteState.customAssets) ? getScopedCustomAssets(remoteState.customAssets) : [];
+                const shouldApplyRemoteCustomAssets = remoteSnapshotTs >= localSnapshotTs || (!localCustomAssets.length && remoteCustomAssets.length);
 
                 if (shouldApplyRemoteSettings && Number.isFinite(Number(remoteState.income))) state.income = Number(remoteState.income);
                 if (shouldApplyRemoteSettings && Number.isFinite(Number(remoteState.savings))) state.savings = Number(remoteState.savings);
@@ -4041,7 +4045,7 @@
                 if (Array.isArray(remoteState.accounts) && remoteState.accounts.length) state.accounts = remoteState.accounts;
                 if (Array.isArray(remoteState.transactions) && remoteState.transactions.length) state.transactions = remoteState.transactions;
                 if (remoteState.lastAccountsUpdatedAt) state.lastAccountsUpdatedAt = remoteState.lastAccountsUpdatedAt;
-                if (shouldApplyRemoteSettings && Array.isArray(remoteState.customAssets)) state.customAssets = getScopedCustomAssets(remoteState.customAssets);
+                if (shouldApplyRemoteCustomAssets) state.customAssets = remoteCustomAssets;
                 if (shouldApplyRemoteSettings && remoteSnapshotTs > 0) localSnapshotUpdatedAt = remoteState.snapshotUpdatedAt;
                 persistLocalStateSnapshot();
 
@@ -4177,6 +4181,28 @@
             return `${mm}/${dd}/${yy}`;
         }
 
+        function shouldLogSeiaPerformanceDebug() {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                if (params.get('debugSeiaPerf') === '1') return true;
+                const storageFlag = String(localStorage.getItem('budget_debug_seia_perf') || sessionStorage.getItem('budget_debug_seia_perf') || '').trim();
+                return storageFlag === '1' || storageFlag.toLowerCase() === 'true';
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function logSeiaPerformanceDebug(stage, details = {}) {
+            if (!shouldLogSeiaPerformanceDebug()) return;
+            console.info('[SEIA_PERF_DEBUG]', {
+                stage,
+                profileId: getProfileId(),
+                isRr: isRrScopedProfile(),
+                customAssetCount: (state.accounts || []).filter((candidate) => candidate?.customAsset).length,
+                ...details,
+            });
+        }
+
         function computePerformancePct(account, kind) {
             if (kind !== 'asset') return null;
             if (account?.customAsset) {
@@ -4187,6 +4213,13 @@
 
             const accountName = String(account?.name || '').trim().toLowerCase();
             const isSeia401k = accountName.includes('seia') && accountName.includes('401k');
+            if (isSeia401k) {
+                logSeiaPerformanceDebug('start', {
+                    plaidYtd: Number(account?.ytdPerformancePct),
+                    accountName,
+                });
+            }
+
             if (isSeia401k && isRrScopedProfile()) {
                 const matchingCustomAccount = (state.accounts || []).find((candidate) => {
                     if (!candidate?.customAsset) return false;
@@ -4195,14 +4228,38 @@
                 });
                 if (matchingCustomAccount) {
                     const customYtd = Number(matchingCustomAccount?.estimationMeta?.ytdPerformancePct);
-                    if (Number.isFinite(customYtd)) return customYtd;
+                    if (Number.isFinite(customYtd)) {
+                        logSeiaPerformanceDebug('using_custom_ytd', {
+                            matchedCustomAccountId: matchingCustomAccount?.id || null,
+                            customYtd,
+                        });
+                        return customYtd;
+                    }
+
                     const customPerformance = Number(matchingCustomAccount?.estimationMeta?.performancePct);
-                    if (Number.isFinite(customPerformance)) return customPerformance;
+                    if (Number.isFinite(customPerformance)) {
+                        logSeiaPerformanceDebug('using_custom_performance_fallback', {
+                            matchedCustomAccountId: matchingCustomAccount?.id || null,
+                            customPerformance,
+                        });
+                        return customPerformance;
+                    }
+
+                    logSeiaPerformanceDebug('matched_custom_account_missing_performance', {
+                        matchedCustomAccountId: matchingCustomAccount?.id || null,
+                    });
+                } else {
+                    logSeiaPerformanceDebug('no_matching_custom_account');
                 }
             }
 
             const plaidYtd = Number(account?.ytdPerformancePct);
-            if (Number.isFinite(plaidYtd)) return plaidYtd;
+            if (Number.isFinite(plaidYtd)) {
+                if (isSeia401k) logSeiaPerformanceDebug('using_plaid_ytd_fallback', { plaidYtd });
+                return plaidYtd;
+            }
+
+            if (isSeia401k) logSeiaPerformanceDebug('no_performance_available');
             return null;
         }
 
