@@ -3021,6 +3021,13 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
+        function getEarliestIsoDate(...isoDates) {
+            const validDates = isoDates
+                .filter((dateString) => typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString))
+                .sort((a, b) => a.localeCompare(b));
+            return validDates.length ? validDates[0] : null;
+        }
+
         async function fetchProxyHistory(symbol, startDate) {
             try {
                 const response = await fetch('/api/get-proxy-performance', {
@@ -3363,9 +3370,12 @@
             const effectiveProxySymbol = isRrOnlyCustomAsset(customAsset)
                 ? 'vt.us'
                 : (customAsset.proxySymbol || 'vt.us');
-            const history = await fetchProxyHistory(effectiveProxySymbol, customAsset.startDate);
-            const hasProxyHistory = Array.isArray(history) && history.length > 0;
             const todayIso = formatDateToIso(new Date());
+            const yearStartIso = `${new Date().getFullYear()}-01-01`;
+            const baselineAnchorDate = customAsset.baselinePerformanceDate || customAsset.startDate;
+            const proxyHistoryStartDate = getEarliestIsoDate(customAsset.startDate, baselineAnchorDate, yearStartIso) || customAsset.startDate;
+            const history = await fetchProxyHistory(effectiveProxySymbol, proxyHistoryStartDate);
+            const hasProxyHistory = Array.isArray(history) && history.length > 0;
 
             const {
                 contributionAmount,
@@ -3395,7 +3405,6 @@
                 : null;
             const proxySinceStartPct = calculateProxyReturnPercent(history, customAsset.startDate, todayIso) ?? twrPct ?? fallbackPerformancePct;
             const latestDailyProxyPct = calculateLatestDailyReturnPercent(history, todayIso);
-            const baselineAnchorDate = customAsset.baselinePerformanceDate || customAsset.startDate;
             const proxySinceBaselinePct = calculateProxyReturnPercent(history, baselineAnchorDate, todayIso) ?? proxySinceStartPct;
             const anchoredPerformancePct = calculateAnchoredPerformancePercent(customAsset, proxySinceBaselinePct);
             const twrPerformancePct = calculateTimeWeightedReturnForWindow(
@@ -3406,7 +3415,6 @@
                 cashflowMap,
             );
             const performancePct = Number.isFinite(twrPerformancePct) ? twrPerformancePct : anchoredPerformancePct;
-            const yearStartIso = `${new Date().getFullYear()}-01-01`;
             const proxyYtdPct = calculateProxyReturnPercent(history, yearStartIso, todayIso);
             const ytdPerformancePct = Number.isFinite(proxyYtdPct) ? Number(proxyYtdPct.toFixed(1)) : null;
             const latestHistoryDate = Array.isArray(history) && history.length
