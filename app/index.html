@@ -3052,6 +3052,14 @@
             return Number(last.close);
         }
 
+        function getCloseOnOrAfter(history, targetIsoDate) {
+            if (!Array.isArray(history) || !history.length) return null;
+            const eligible = history.filter((entry) => entry?.date && entry.date >= targetIsoDate && Number.isFinite(Number(entry.close)));
+            if (!eligible.length) return null;
+            const first = eligible.sort((a, b) => a.date.localeCompare(b.date))[0];
+            return Number(first.close);
+        }
+
         function buildRecurringEventDates(startDate, frequencyDays, endDate) {
             const dates = [];
             const start = parseIsoDateToUtc(startDate);
@@ -3345,7 +3353,7 @@
 
         function calculateProxyReturnPercent(history, fromIsoDate, toIsoDate) {
             if (!Array.isArray(history) || !history.length || !fromIsoDate || !toIsoDate) return null;
-            const fromClose = getCloseOnOrBefore(history, fromIsoDate);
+            const fromClose = getCloseOnOrBefore(history, fromIsoDate) ?? getCloseOnOrAfter(history, fromIsoDate);
             const toClose = getCloseOnOrBefore(history, toIsoDate);
             if (!Number.isFinite(fromClose) || !Number.isFinite(toClose) || fromClose <= 0) return null;
             return Number((((toClose / fromClose) - 1) * 100).toFixed(1));
