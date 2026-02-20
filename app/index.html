@@ -3803,6 +3803,9 @@
         }
 
         function getProfileId() {
+            const existingProfileId = String(localStorage.getItem(PROFILE_ID_KEY) || sessionStorage.getItem(PROFILE_ID_KEY) || '').trim();
+            if (existingProfileId) return existingProfileId;
+
             const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || sessionStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
             const authenticatedUserId = String(localStorage.getItem('budgetTrackerUserId') || sessionStorage.getItem('budgetTrackerUserId') || '').trim();
             if (authenticatedUser || authenticatedUserId) {
@@ -3812,8 +3815,7 @@
                 return userScopedId;
             }
 
-            let profileId = localStorage.getItem(PROFILE_ID_KEY);
-            if (profileId) return profileId;
+            let profileId = existingProfileId;
 
             profileId = (window.crypto && window.crypto.randomUUID)
                 ? window.crypto.randomUUID()
