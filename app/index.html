@@ -1368,13 +1368,82 @@
 
         .budget-day-scroller {
             display: flex;
-            align-items: center;
+            flex-direction: column;
+            align-items: stretch;
             gap: 10px;
+        }
+
+        .budget-day-picker {
+            position: relative;
+            height: 132px;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+            background: var(--bg-secondary);
+            overflow: hidden;
+        }
+
+        .budget-day-picker::before,
+        .budget-day-picker::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 44px;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .budget-day-picker::before {
+            top: 0;
+            background: linear-gradient(to bottom, var(--bg-secondary) 0%, rgba(0, 0, 0, 0) 100%);
+        }
+
+        .budget-day-picker::after {
+            bottom: 0;
+            background: linear-gradient(to top, var(--bg-secondary) 0%, rgba(0, 0, 0, 0) 100%);
+        }
+
+        .budget-day-wheel {
+            height: 100%;
+            overflow-y: auto;
+            scroll-snap-type: y mandatory;
+            overscroll-behavior: contain;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .budget-day-wheel::-webkit-scrollbar {
+            display: none;
+        }
+
+        .budget-day-option {
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-tertiary);
+            scroll-snap-align: center;
+            transition: color 0.15s ease, transform 0.15s ease;
+            user-select: none;
+        }
+
+        .budget-day-option.active {
+            color: var(--text-primary);
+            transform: scale(1.05);
         }
 
         .budget-day-scroller .form-input {
             text-align: center;
             font-weight: 800;
+            max-width: 0;
+            max-height: 0;
+            opacity: 0;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            pointer-events: none;
         }
 
         .stepper-btn {
@@ -2383,9 +2452,10 @@
             <div class="form-group">
                 <label class="form-label">Start Day (1-31)</label>
                 <div class="budget-day-scroller">
-                    <button type="button" class="stepper-btn" onclick="adjustBudgetDay(-1)" aria-label="Decrease start day">−</button>
+                    <div class="budget-day-picker" aria-label="Scroll to set budget start day">
+                        <div class="budget-day-wheel" id="budgetDayWheel"></div>
+                    </div>
                     <input type="number" class="form-input" id="budgetDayInput" placeholder="4" min="1" max="31" onkeydown="handleEnterSave(event, saveBudgetPeriod)">
-                    <button type="button" class="stepper-btn" onclick="adjustBudgetDay(1)" aria-label="Increase start day">+</button>
                 </div>
             </div>
             <div class="btn-group">
@@ -3290,7 +3360,10 @@
         }
 
         async function buildEstimatedCustomAccount(customAsset) {
-            const history = await fetchProxyHistory(customAsset.proxySymbol || 'vt.us', customAsset.startDate);
+            const effectiveProxySymbol = isRrOnlyCustomAsset(customAsset)
+                ? 'vt.us'
+                : (customAsset.proxySymbol || 'vt.us');
+            const history = await fetchProxyHistory(effectiveProxySymbol, customAsset.startDate);
             const hasProxyHistory = Array.isArray(history) && history.length > 0;
             const todayIso = formatDateToIso(new Date());
 
@@ -3309,7 +3382,10 @@
 
             const { endingBalance: estimatedBalance, twrPct } = calculateDailyEstimatedPortfolio(history, customAsset, cashflowMap, todayIso);
             const manualCurrentValue = Number(customAsset.currentValue);
-            const hasManualCurrentValue = Number.isFinite(manualCurrentValue) && manualCurrentValue >= 0;
+            const isRrSeiaCustomAsset = isRrOnlyCustomAsset(customAsset);
+            const hasManualCurrentValue = !isRrSeiaCustomAsset
+                && Number.isFinite(manualCurrentValue)
+                && manualCurrentValue >= 0;
             const computedBalance = hasManualCurrentValue ? manualCurrentValue : estimatedBalance;
             const netContributed = totalContributions - totalWithdrawals;
             const investedBasis = Number(customAsset.startBalance || 0) + netContributed;
@@ -3346,7 +3422,7 @@
                 balance: Number(computedBalance.toFixed(2)),
                 customAsset: true,
                 estimationMeta: {
-                    proxySymbol: (customAsset.proxySymbol || 'vt.us').toUpperCase(),
+                    proxySymbol: effectiveProxySymbol.toUpperCase(),
                     startDate: customAsset.startDate,
                     nextContributionDate: customAsset.nextContributionDate,
                     contributionAmount,
@@ -4213,13 +4289,26 @@
 
 
         function getLiabilityDetails(account) {
-            const parsedInterestRate = Number(account.interestRate);
-            const parsedPaymentAmount = Number(account.paymentAmount);
-            return {
-                interestRate: Number.isFinite(parsedInterestRate) ? parsedInterestRate : null,
-                nextPaymentDate: account.nextPaymentDate || null,
-                paymentAmount: Number.isFinite(parsedPaymentAmount) ? parsedPaymentAmount : null,
+            const parseNullableNumber = (value) => {
+                if (value === null || value === undefined || value === '' || value === '--') return null;
+                const parsed = Number(value);
+                return Number.isFinite(parsed) ? parsed : null;
             };
+
+            const parsedInterestRate = parseNullableNumber(account.interestRate);
+            const parsedPaymentAmount = parseNullableNumber(account.paymentAmount);
+            return {
+                interestRate: parsedInterestRate,
+                nextPaymentDate: account.nextPaymentDate || null,
+                paymentAmount: parsedPaymentAmount,
+            };
+        }
+
+        function getAccountBalance(account) {
+            const plaidBalance = Number(account?.plaidBalanceCurrent);
+            if (!account?.customAsset && Number.isFinite(plaidBalance)) return plaidBalance;
+            const parsedBalance = Number(account?.balance);
+            return Number.isFinite(parsedBalance) ? parsedBalance : 0;
         }
 
         function applyAccountOverride(account, override = {}) {
@@ -4238,11 +4327,11 @@
             const assetAccounts = accounts
                 .filter(acc => !isLiabilityAccount(acc))
                 .filter(acc => isAccountVisible(acc, 'asset'))
-                .sort((a, b) => Math.abs(Number(b.balance || 0)) - Math.abs(Number(a.balance || 0)));
+                .sort((a, b) => Math.abs(getAccountBalance(b)) - Math.abs(getAccountBalance(a)));
             const liabilityAccounts = accounts
                 .filter(acc => isLiabilityAccount(acc))
                 .filter(acc => isAccountVisible(acc, 'liability'))
-                .sort((a, b) => Math.abs(Number(b.balance || 0)) - Math.abs(Number(a.balance || 0)));
+                .sort((a, b) => Math.abs(getAccountBalance(b)) - Math.abs(getAccountBalance(a)));
 
             let totalAssets = 0;
             let totalLiabilities = 0;
@@ -4258,8 +4347,8 @@
                 return Object.entries(grouped)
                     .map(([custodian, accountsForCustodian]) => ({
                         custodian,
-                        accounts: accountsForCustodian.sort((a, b) => Math.abs(Number(b.balance || 0)) - Math.abs(Number(a.balance || 0))),
-                        totalBalance: accountsForCustodian.reduce((sum, account) => sum + Math.abs(Number(account.balance || 0)), 0)
+                        accounts: accountsForCustodian.sort((a, b) => Math.abs(getAccountBalance(b)) - Math.abs(getAccountBalance(a))),
+                        totalBalance: accountsForCustodian.reduce((sum, account) => sum + Math.abs(getAccountBalance(account)), 0)
                     }))
                     .sort((a, b) => b.totalBalance - a.totalBalance);
             };
@@ -4281,7 +4370,7 @@
                             : '--');
                     const groupHeading = `<tr class="custodian-row"><td colspan="${colCount}"><div class="custodian-label-wrap"><span>${group.custodian}</span><span class="custodian-last-updated">Last updated: ${groupLastUpdatedLabel}</span></div></td></tr>`;
                     const accountRows = group.accounts.map(acc => {
-                        const value = Number(acc.balance || 0);
+                        const value = getAccountBalance(acc);
                         const ytdPct = computePerformancePct(acc, kind);
 
                         if (kind === 'asset') totalAssets += Math.max(value, 0);
@@ -4353,7 +4442,7 @@
                     : [{
                         symbol: account.subtype ? account.subtype.toUpperCase() : 'ACCOUNT',
                         name: account.name,
-                        value: Math.abs(Number(account.balance || 0)),
+                        value: Math.abs(getAccountBalance(account)),
                         weight: 100,
                         livePct: null,
                         ytdPct,
@@ -4364,7 +4453,7 @@
                     const holdValue = Number(h.value || 0);
                     const holdLiveRaw = h.livePct === null || h.livePct === undefined || h.livePct === '' ? null : Number(h.livePct);
                     const holdYtdRaw = h.ytdPct === null || h.ytdPct === undefined || h.ytdPct === '' ? ytdPct : Number(h.ytdPct);
-                    const holdLive = holdLiveRaw;
+                    const holdLive = Number.isFinite(holdLiveRaw) ? holdLiveRaw : null;
                     const holdYtd = Number.isFinite(holdYtdRaw) ? holdYtdRaw : null;
                     const liveClass = holdLive === null ? 'neutral' : (holdLive < 0 ? 'negative' : 'positive');
                     const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
@@ -4712,13 +4801,57 @@
             document.getElementById('fixedModal').classList.add('active');
             setTimeout(() => nameInput.focus(), 50);
         }
-        function openBudgetPeriodModal() { document.getElementById('budgetDayInput').value = state.budgetStartDay || 4; document.getElementById('budgetPeriodModal').classList.add('active'); }
+        let budgetDayWheelInitialized = false;
+        let budgetDayWheelScrollLock = false;
+
+        function initBudgetDayWheel() {
+            const wheel = document.getElementById('budgetDayWheel');
+            const input = document.getElementById('budgetDayInput');
+            if (!wheel || !input || budgetDayWheelInitialized) return;
+
+            wheel.innerHTML = [
+                '<div class="budget-day-option" data-day="spacer"></div>',
+                ...Array.from({ length: 31 }, (_, idx) => `<div class="budget-day-option" data-day="${idx + 1}">${idx + 1}</div>`),
+                '<div class="budget-day-option" data-day="spacer"></div>',
+            ].join('');
+
+            wheel.addEventListener('scroll', () => {
+                if (budgetDayWheelScrollLock) return;
+                const day = Math.min(31, Math.max(1, Math.round(wheel.scrollTop / 44)));
+                input.value = day;
+                wheel.querySelectorAll('.budget-day-option').forEach((option) => {
+                    option.classList.toggle('active', Number(option.dataset.day) === day);
+                });
+            });
+
+            budgetDayWheelInitialized = true;
+        }
+
+        function setBudgetDayWheelValue(day, behavior = 'smooth') {
+            const wheel = document.getElementById('budgetDayWheel');
+            const input = document.getElementById('budgetDayInput');
+            if (!wheel || !input) return;
+            const safeDay = Math.min(31, Math.max(1, Number(day) || 4));
+            input.value = safeDay;
+            budgetDayWheelScrollLock = true;
+            wheel.scrollTo({ top: safeDay * 44, behavior });
+            wheel.querySelectorAll('.budget-day-option').forEach((option) => {
+                option.classList.toggle('active', Number(option.dataset.day) === safeDay);
+            });
+            setTimeout(() => { budgetDayWheelScrollLock = false; }, behavior === 'smooth' ? 250 : 0);
+        }
+
+        function openBudgetPeriodModal() {
+            initBudgetDayWheel();
+            setBudgetDayWheelValue(state.budgetStartDay || 4, 'auto');
+            document.getElementById('budgetPeriodModal').classList.add('active');
+        }
 
         function adjustBudgetDay(delta) {
             const input = document.getElementById('budgetDayInput');
             const current = parseInt(input.value, 10) || state.budgetStartDay || 4;
             const next = Math.min(31, Math.max(1, current + delta));
-            input.value = next;
+            setBudgetDayWheelValue(next);
         }
 
         function adjustSplitPeople(delta) {
@@ -4846,13 +4979,6 @@
             updateUI();
         }
         function saveBudgetPeriod() { const day = parseInt(document.getElementById('budgetDayInput').value); if (day >= 1 && day <= 31) { state.budgetStartDay = day; updateUI(); closeModal('budgetPeriodModal'); } }
-
-        function handleBudgetDayWheel(event) {
-            const input = document.getElementById('budgetDayInput');
-            if (!input || document.activeElement !== input) return;
-            event.preventDefault();
-            adjustBudgetDay(event.deltaY > 0 ? -1 : 1);
-        }
 
         function saveReimbursable() {
             if (currentReimbursableIndex !== null) {
@@ -5252,8 +5378,7 @@
         });
         checkConnection();
 
-        const budgetDayInput = document.getElementById('budgetDayInput');
-        if (budgetDayInput) budgetDayInput.addEventListener('wheel', handleBudgetDayWheel, { passive: false });
+        initBudgetDayWheel();
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('active');

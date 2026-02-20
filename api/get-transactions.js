@@ -495,6 +495,7 @@ module.exports = async (req, res) => {
           subtype: acc.subtype,
           institutionName: acc?.official_name || acc?.institution_name || null,
           balance: acc.balances.current,
+          plaidBalanceCurrent: acc.balances.current,
           holdings: mappedHoldings,
           ytdPerformancePct: accountYtdPct,
           currentPerformancePct: accountCurrentPct,
