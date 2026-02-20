@@ -117,8 +117,6 @@ function buildLiabilityDetails(account, liabilityByAccountId = {}) {
   const plaidLiability = liabilityByAccountId[account?.account_id] || {};
   const plaidInterestRate = Number(plaidLiability.interestRate);
   const interestRate = Number.isFinite(plaidInterestRate) ? Number(plaidInterestRate.toFixed(2)) : null;
-  const termMonths = null;
-
   const parsedNextPaymentDate = plaidLiability.nextPaymentDate ? new Date(plaidLiability.nextPaymentDate) : null;
   const nextPaymentDate = parsedNextPaymentDate && !Number.isNaN(parsedNextPaymentDate.getTime())
     ? parsedNextPaymentDate
@@ -129,7 +127,6 @@ function buildLiabilityDetails(account, liabilityByAccountId = {}) {
 
   return {
     interestRate,
-    termMonths,
     nextPaymentDate: nextPaymentDate ? nextPaymentDate.toISOString().split('T')[0] : null,
     paymentAmount,
   };

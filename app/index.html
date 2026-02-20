@@ -986,12 +986,11 @@
         }
 
         .fixed-expense-value {
-            min-width: 110px;
             text-align: right;
         }
 
         .fixed-expense-value.editable-value {
-            width: 110px;
+            width: auto;
         }
 
         .setting-item.connected .setting-value {
@@ -1056,6 +1055,25 @@
             color: var(--text-secondary);
         }
 
+        .sidebar-inline-links {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .sidebar-inline-link {
+            color: var(--text-secondary);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            cursor: pointer;
+        }
+
+        .sidebar-inline-link:hover {
+            color: var(--text-primary);
+        }
+
         .sidebar .btn {
             background: #f5f8ff;
             color: var(--bg-primary);
@@ -1065,6 +1083,25 @@
         .sidebar .btn:hover {
             background: #d7dfed;
             border-color: #d7dfed;
+        }
+
+        .sidebar .btn.btn-sleek {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 10px 14px;
+            border-radius: 999px;
+            letter-spacing: 0.01em;
+        }
+
+        .sidebar .btn.btn-sleek:hover {
+            border-color: var(--text-secondary);
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        #statusText.connected {
+            color: var(--green);
         }
 
         .sidebar-overlay {
@@ -1310,6 +1347,13 @@
             flex-direction: column;
             gap: 2px;
             align-items: flex-start;
+            width: 100%;
+        }
+
+        .custodian-label-wrap span {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            white-space: normal;
         }
 
         .custodian-last-updated {
@@ -2112,24 +2156,19 @@
             <div class="sidebar-section">
                 <div class="sidebar-section-title sidebar-section-title--highlight">Fixed Expenses</div>
                 <div id="sidebarFixedList"></div>
-                <button class="btn btn-secondary" onclick="openFixedModal()">Add Expense</button>
+                <button class="btn btn-secondary btn-sleek" onclick="openFixedModal()">Add Expense</button>
             </div>
 
             <div class="sidebar-section">
                 <div class="sidebar-section-title sidebar-section-title--highlight">Connection</div>
                 <div class="setting-label" id="statusText">Not connected</div>
                 <div class="setting-list" id="connectedAccountsList">No connected accounts yet.</div>
-                <button class="btn btn-primary" id="connectBtn" onclick="connectPlaid()">Connect Account</button>
+                <button class="btn btn-primary btn-sleek" id="connectBtn" onclick="connectPlaid()">Connect Account</button>
             </div>
 
-            <div class="sidebar-section">
-                <div class="sidebar-section-title sidebar-section-title--highlight">History</div>
-                <button class="btn btn-secondary" onclick="openMonthlyExpenseHistoryModal()">Monthly Expenses</button>
-            </div>
-
-            <div class="sidebar-section">
-                <div class="sidebar-section-title sidebar-section-title--highlight">Export</div>
-                <button class="btn btn-secondary" onclick="exportToCSV(); toggleSidebar();">Download CSV</button>
+            <div class="sidebar-inline-links">
+                <a href="#" class="sidebar-inline-link" onclick="event.preventDefault(); openMonthlyExpenseHistoryModal();">History</a>
+                <a href="#" class="sidebar-inline-link" onclick="event.preventDefault(); exportToCSV(); toggleSidebar();">Export</a>
             </div>
         </div>
         <div class="sidebar-sync-footer">
@@ -3292,30 +3331,8 @@
             );
             const performancePct = Number.isFinite(twrPerformancePct) ? twrPerformancePct : anchoredPerformancePct;
             const yearStartIso = `${new Date().getFullYear()}-01-01`;
-            let ytdPerformancePct = performancePct;
-            if (yearStartIso >= customAsset.startDate) {
-                const dayBeforeYearStart = formatDateToIso(new Date(`${yearStartIso}T00:00:00.000Z`));
-                const dayBeforeYearStartDate = parseIsoDateToUtc(dayBeforeYearStart);
-                if (dayBeforeYearStartDate) {
-                    dayBeforeYearStartDate.setUTCDate(dayBeforeYearStartDate.getUTCDate() - 1);
-                    const seedEndIso = formatDateToIso(dayBeforeYearStartDate);
-                    const seed = calculateDailyEstimatedPortfolio(history, customAsset, cashflowMap, seedEndIso);
-                    const ytdTwr = calculateTimeWeightedReturnForWindow(history, yearStartIso, todayIso, seed.endingBalance, cashflowMap);
-                    if (Number.isFinite(ytdTwr)) ytdPerformancePct = ytdTwr;
-                }
-            }
-            const baselinePct = Number(customAsset.baselinePerformancePct);
-            const canAnchorYtdToBaseline = Number.isFinite(baselinePct)
-                && baselineAnchorDate >= yearStartIso
-                && baselineAnchorDate <= todayIso;
-            if (canAnchorYtdToBaseline) {
-                const postBaselineProxyPct = calculateProxyReturnPercent(history, baselineAnchorDate, todayIso);
-                if (Number.isFinite(postBaselineProxyPct)) {
-                    ytdPerformancePct = Number(((((1 + (baselinePct / 100)) * (1 + (postBaselineProxyPct / 100))) - 1) * 100).toFixed(1));
-                } else {
-                    ytdPerformancePct = baselinePct;
-                }
-            }
+            const proxyYtdPct = calculateProxyReturnPercent(history, yearStartIso, todayIso);
+            const ytdPerformancePct = Number.isFinite(proxyYtdPct) ? Number(proxyYtdPct.toFixed(1)) : null;
             const latestHistoryDate = Array.isArray(history) && history.length
                 ? history.map((entry) => entry.date).filter(Boolean).sort().slice(-1)[0]
                 : null;
@@ -4181,28 +4198,6 @@
             return `${mm}/${dd}/${yy}`;
         }
 
-        function shouldLogSeiaPerformanceDebug() {
-            try {
-                const params = new URLSearchParams(window.location.search || '');
-                if (params.get('debugSeiaPerf') === '1') return true;
-                const storageFlag = String(localStorage.getItem('budget_debug_seia_perf') || sessionStorage.getItem('budget_debug_seia_perf') || '').trim();
-                return storageFlag === '1' || storageFlag.toLowerCase() === 'true';
-            } catch (error) {
-                return false;
-            }
-        }
-
-        function logSeiaPerformanceDebug(stage, details = {}) {
-            if (!shouldLogSeiaPerformanceDebug()) return;
-            console.info('[SEIA_PERF_DEBUG]', {
-                stage,
-                profileId: getProfileId(),
-                isRr: isRrScopedProfile(),
-                customAssetCount: (state.accounts || []).filter((candidate) => candidate?.customAsset).length,
-                ...details,
-            });
-        }
-
         function computePerformancePct(account, kind) {
             if (kind !== 'asset') return null;
             if (account?.customAsset) {
@@ -4211,55 +4206,8 @@
                 return null;
             }
 
-            const accountName = String(account?.name || '').trim().toLowerCase();
-            const isSeia401k = accountName.includes('seia') && accountName.includes('401k');
-            if (isSeia401k) {
-                logSeiaPerformanceDebug('start', {
-                    plaidYtd: Number(account?.ytdPerformancePct),
-                    accountName,
-                });
-            }
-
-            if (isSeia401k && isRrScopedProfile()) {
-                const matchingCustomAccount = (state.accounts || []).find((candidate) => {
-                    if (!candidate?.customAsset) return false;
-                    const customName = String(candidate?.name || '').trim().toLowerCase();
-                    return customName.includes('seia') && customName.includes('401k');
-                });
-                if (matchingCustomAccount) {
-                    const customYtd = Number(matchingCustomAccount?.estimationMeta?.ytdPerformancePct);
-                    if (Number.isFinite(customYtd)) {
-                        logSeiaPerformanceDebug('using_custom_ytd', {
-                            matchedCustomAccountId: matchingCustomAccount?.id || null,
-                            customYtd,
-                        });
-                        return customYtd;
-                    }
-
-                    const customPerformance = Number(matchingCustomAccount?.estimationMeta?.performancePct);
-                    if (Number.isFinite(customPerformance)) {
-                        logSeiaPerformanceDebug('using_custom_performance_fallback', {
-                            matchedCustomAccountId: matchingCustomAccount?.id || null,
-                            customPerformance,
-                        });
-                        return customPerformance;
-                    }
-
-                    logSeiaPerformanceDebug('matched_custom_account_missing_performance', {
-                        matchedCustomAccountId: matchingCustomAccount?.id || null,
-                    });
-                } else {
-                    logSeiaPerformanceDebug('no_matching_custom_account');
-                }
-            }
-
             const plaidYtd = Number(account?.ytdPerformancePct);
-            if (Number.isFinite(plaidYtd)) {
-                if (isSeia401k) logSeiaPerformanceDebug('using_plaid_ytd_fallback', { plaidYtd });
-                return plaidYtd;
-            }
-
-            if (isSeia401k) logSeiaPerformanceDebug('no_performance_available');
+            if (Number.isFinite(plaidYtd)) return plaidYtd;
             return null;
         }
 
@@ -4269,48 +4217,15 @@
             const parsedPaymentAmount = Number(account.paymentAmount);
             return {
                 interestRate: Number.isFinite(parsedInterestRate) ? parsedInterestRate : null,
-                termMonths: Number(account.termMonths || 0),
                 nextPaymentDate: account.nextPaymentDate || null,
                 paymentAmount: Number.isFinite(parsedPaymentAmount) ? parsedPaymentAmount : null,
             };
         }
 
-        function parseOptionalNumber(value) {
-            if (value === null || value === undefined || value === '') return undefined;
-            const parsed = Number(value);
-            return Number.isFinite(parsed) ? parsed : undefined;
-        }
-
-        function parseOptionalIsoDate(value) {
-            if (typeof value !== 'string' || !value.trim()) return undefined;
-            const parsed = parseIsoDateToUtc(value.trim());
-            return parsed ? formatDateToIso(parsed) : undefined;
-        }
-
         function applyAccountOverride(account, override = {}) {
-            const accountName = String(account?.name || '').toLowerCase();
-            const isFirstTechStudentLoan = accountName.includes('first tech') && accountName.includes('student');
-
-            const interestRateOverride = parseOptionalNumber(override.interestRate);
-            const paymentAmountOverride = parseOptionalNumber(override.paymentAmount);
-            const nextPaymentDateOverride = parseOptionalIsoDate(override.nextPaymentDate);
-
-            const fallbackInterestRate = isFirstTechStudentLoan ? 2.84 : undefined;
-            const fallbackPaymentAmount = isFirstTechStudentLoan ? 550 : undefined;
-            const fallbackNextPaymentDate = isFirstTechStudentLoan ? '2025-03-21' : undefined;
-
             return {
                 ...account,
                 name: override.name || account.name,
-                interestRate: interestRateOverride !== undefined
-                    ? interestRateOverride
-                    : (account.interestRate ?? fallbackInterestRate),
-                paymentAmount: paymentAmountOverride !== undefined
-                    ? paymentAmountOverride
-                    : (account.paymentAmount ?? fallbackPaymentAmount),
-                nextPaymentDate: nextPaymentDateOverride !== undefined
-                    ? nextPaymentDateOverride
-                    : (account.nextPaymentDate || fallbackNextPaymentDate),
             };
         }
 
@@ -4453,7 +4368,7 @@
                     const holdYtd = Number.isFinite(holdYtdRaw) ? holdYtdRaw : null;
                     const liveClass = holdLive === null ? 'neutral' : (holdLive < 0 ? 'negative' : 'positive');
                     const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
-                    const contributionValue = Number(account?.estimationMeta?.ytdContributed);
+                    const contributionValue = Number(account?.ytdContributed ?? account?.estimationMeta?.ytdContributed);
                     const contributionDisplay = Number.isFinite(contributionValue) ? formatCurrency(contributionValue) : '--';
                     const holdingLabel = h.symbol || h.name || '--';
                     return `<tr class="holding-main-row">
@@ -5139,7 +5054,10 @@
             const statusTextEl = document.getElementById('statusText');
             const connectBtnEl = document.getElementById('connectBtn');
 
-            if (statusTextEl) statusTextEl.textContent = institutionLabel ? 'Connected - ' + institutionLabel : 'Not connected';
+            if (statusTextEl) {
+                statusTextEl.textContent = institutionLabel ? 'Connected - ' + institutionLabel : 'Not connected';
+                statusTextEl.classList.toggle('connected', Boolean(institutionLabel));
+            }
             if (connectBtnEl) connectBtnEl.textContent = institutionLabel ? 'Connect Another Account' : 'Connect Account';
         }
 
