@@ -3028,6 +3028,13 @@
             return validDates.length ? validDates[0] : null;
         }
 
+        function offsetIsoDate(isoDate, daysOffset) {
+            const parsedDate = parseIsoDateToUtc(isoDate);
+            if (!parsedDate || !Number.isFinite(Number(daysOffset))) return isoDate;
+            parsedDate.setUTCDate(parsedDate.getUTCDate() + Number(daysOffset));
+            return formatDateToIso(parsedDate) || isoDate;
+        }
+
         async function fetchProxyHistory(symbol, startDate) {
             try {
                 const response = await fetch('/api/get-proxy-performance', {
@@ -3381,7 +3388,8 @@
             const todayIso = formatDateToIso(new Date());
             const yearStartIso = `${new Date().getFullYear()}-01-01`;
             const baselineAnchorDate = customAsset.baselinePerformanceDate || customAsset.startDate;
-            const proxyHistoryStartDate = getEarliestIsoDate(customAsset.startDate, baselineAnchorDate, yearStartIso) || customAsset.startDate;
+            const earliestAnchorDate = getEarliestIsoDate(customAsset.startDate, baselineAnchorDate, yearStartIso) || customAsset.startDate;
+            const proxyHistoryStartDate = offsetIsoDate(earliestAnchorDate, -7);
             const history = await fetchProxyHistory(effectiveProxySymbol, proxyHistoryStartDate);
             const hasProxyHistory = Array.isArray(history) && history.length > 0;
 
