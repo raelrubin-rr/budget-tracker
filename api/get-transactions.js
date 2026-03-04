@@ -95,8 +95,12 @@ function normalizePercentValue(value, treatAsRatio = false) {
   return Number(normalized.toFixed(1));
 }
 
-function readPerformancePercent(candidates = []) {
-  for (const candidate of candidates) {
+function readPerformancePercent(...candidates) {
+  const normalizedCandidates = candidates.length === 1 && Array.isArray(candidates[0])
+    ? candidates[0]
+    : candidates;
+
+  for (const candidate of normalizedCandidates) {
     const value = candidate && typeof candidate === 'object' ? candidate.value : candidate;
     const treatAsRatio = Boolean(candidate && typeof candidate === 'object' && candidate.treatAsRatio);
     const parsed = normalizePercentValue(value, treatAsRatio);
@@ -347,10 +351,35 @@ function buildLiabilityByAccountId(liabilities = {}) {
 async function fetchTransactionsWithRetry(access_token, start_date, end_date) {
   const maxAttempts = 4;
   const unsupportedErrors = new Set(['INVALID_PRODUCT', 'PRODUCTS_NOT_SUPPORTED']);
+  const count = 500;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      return await plaidClient.transactionsGet({ access_token, start_date, end_date });
+      const aggregatedTransactions = [];
+      let offset = 0;
+      let totalTransactions = 0;
+      let firstPage = null;
+
+      do {
+        const page = await plaidClient.transactionsGet({ access_token, start_date, end_date, count, offset });
+        if (!firstPage) firstPage = page;
+        const pageTransactions = page?.data?.transactions || [];
+
+        aggregatedTransactions.push(...pageTransactions);
+        totalTransactions = Number(page?.data?.total_transactions || aggregatedTransactions.length);
+        offset += pageTransactions.length;
+
+        if (!pageTransactions.length) break;
+      } while (offset < totalTransactions);
+
+      return {
+        ...(firstPage || {}),
+        data: {
+          ...((firstPage && firstPage.data) || {}),
+          transactions: aggregatedTransactions,
+          total_transactions: aggregatedTransactions.length,
+        },
+      };
     } catch (error) {
       const plaidErrorCode = getPlaidErrorCode(error);
       if (unsupportedErrors.has(plaidErrorCode)) {
@@ -459,9 +488,22 @@ module.exports = async (req, res) => {
             const value = Math.abs(Number(holding.institution_value || 0));
             const costBasis = Number(holding.cost_basis || 0);
             const valueChange = value - costBasis;
-            const livePct = costBasis > 0
+            const computedLivePct = costBasis > 0
               ? Number(((valueChange / costBasis) * 100).toFixed(1))
               : null;
+            const livePct = readPerformancePercent([
+              { value: holding.current_return, treatAsRatio: true },
+              { value: holding.currentReturn, treatAsRatio: true },
+              { value: holding.current_performance_pct },
+              { value: holding.currentPerformancePct },
+              { value: holding.unrealized_gain_loss_percentage },
+              { value: holding.unrealizedGainLossPercentage },
+              { value: security.current_return, treatAsRatio: true },
+              { value: security.currentReturn, treatAsRatio: true },
+              { value: security.current_performance_pct },
+              { value: security.currentPerformancePct },
+              computedLivePct,
+            ]);
 
             return {
               symbol: security.ticker_symbol || security.name || acc.subtype || 'HOLDING',
