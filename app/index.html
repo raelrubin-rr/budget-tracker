@@ -2951,7 +2951,7 @@
         function normalizeTransactionCategory(tx) {
             const accountType = normalizeAccountType(tx.account || tx.accountType || tx.accountSubType || tx.accountSubtype || tx.accountName || tx.account_name || tx.type);
             tx.account = accountType || (Number(tx.amount) < 0 ? 'credit' : 'checking');
-            if (tx.account === 'checking' && typeof tx.includeInBudget !== 'boolean') tx.includeInBudget = false;
+            if (tx.account === 'checking' && typeof tx.includeInBudget !== 'boolean') tx.includeInBudget = Number(tx.amount) < 0;
             const category = tx.category || autoCategorize(tx.name);
             tx.category = category;
             tx.categoryLabel = tx.categoryLabel || getCategoryLabel(category);
@@ -3589,7 +3589,7 @@
         function isTransactionBudgetEligible(tx) {
             if (!tx || Number(tx.amount) >= 0) return isCreditRefund(tx);
             if (tx.account !== 'checking') return true;
-            return Boolean(tx.includeInBudget) && isCheckingTransactionLinkedToCredit(tx);
+            return tx.includeInBudget !== false;
         }
 
         function calculateCycleMetrics(cycle) {
@@ -4489,9 +4489,7 @@
                     const holdYtd = Number.isFinite(holdYtdRaw) ? holdYtdRaw : null;
                     const liveClass = holdLive === null ? 'neutral' : (holdLive < 0 ? 'negative' : 'positive');
                     const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
-                    const holdingLabel = h.symbol && h.name
-                        ? `${h.symbol} · ${h.name}`
-                        : (h.symbol || h.name || '--');
+                    const holdingLabel = h.name || h.symbol || '--';
                     return `<tr class="holding-main-row">
                         <td><span class="holding-symbol">${holdingLabel}</span></td>
                         <td class="holding-value-cell">
