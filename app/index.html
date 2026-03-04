@@ -1447,8 +1447,8 @@
         }
 
         .stepper-btn {
-            width: 42px;
-            height: 42px;
+            width: 48px;
+            height: 48px;
             border-radius: 10px;
             border: 2px solid var(--border-color);
             background: var(--bg-secondary);
@@ -1459,6 +1459,7 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            touch-action: manipulation;
         }
 
         .stepper-btn:hover {
@@ -1693,6 +1694,14 @@
         .holding-main-row td {
             border-bottom: 1px solid var(--border-color);
             vertical-align: top;
+            padding-top: 8px;
+            padding-bottom: 8px;
+        }
+
+        #accountDetailsModal .modal-content {
+            max-height: min(82vh, 760px);
+            overflow-y: auto;
+            padding: 24px;
         }
 
         .holding-performance-item {
@@ -1750,11 +1759,6 @@
         .holdings-table td:nth-child(3),
         .holdings-table th:nth-child(3) {
             width: 20%;
-        }
-
-        .holdings-table td:nth-child(4),
-        .holdings-table th:nth-child(4) {
-            width: 18%;
         }
 
         .btn--compact {
@@ -1998,10 +2002,6 @@
             .holdings-table td:nth-child(3) {
                 width: 24%;
             }
-            .holdings-table th:nth-child(4),
-            .holdings-table td:nth-child(4) {
-                width: 14%;
-            }
             .accounts-total {
                 font-size: 21px;
             }
@@ -2044,7 +2044,7 @@
             #accountDetailsModal .holdings-table th,
             #accountDetailsModal .holdings-table td {
                 font-size: 12px;
-                padding: 8px 4px;
+                padding: 6px 4px;
             }
             #accountDetailsModal .holdings-table th {
                 font-size: 10px;
@@ -2062,11 +2062,7 @@
             }
             #accountDetailsModal .holdings-table th:nth-child(3),
             #accountDetailsModal .holdings-table td:nth-child(3) {
-                width: 20%;
-            }
-            #accountDetailsModal .holdings-table th:nth-child(4),
-            #accountDetailsModal .holdings-table td:nth-child(4) {
-                width: 16%;
+                width: 32%;
             }
             #accountDetailsModal .holdings-table th:nth-child(2),
             #accountDetailsModal .holdings-table td:nth-child(2) {
@@ -2112,8 +2108,8 @@
                 margin-bottom: 18px;
             }
             .stepper-btn {
-                width: 38px;
-                height: 38px;
+                width: 44px;
+                height: 44px;
             }
         }
 
@@ -3576,13 +3572,33 @@
             return { start: cycleStart, end: cycleEnd, label, cycleId: cycleStart.toISOString().split('T')[0] };
         }
 
+        function getFixedExpensesTotal() {
+            return Math.round((state.fixedExpenses || []).reduce((sum, exp) => sum + (Number(exp?.amount) || 0), 0));
+        }
+
+        function isCheckingTransactionLinkedToCredit(tx) {
+            if (!tx || tx.account !== 'checking') return false;
+            const txKey = getTransactionIdentityKey(tx);
+            return (state.transactions || []).some((candidate) => {
+                if (candidate?.account !== 'credit') return false;
+                if (candidate?.linkedDepositId && tx?.id && candidate.linkedDepositId === tx.id) return true;
+                return candidate?.linkedDepositId && candidate.linkedDepositId === txKey;
+            });
+        }
+
+        function isTransactionBudgetEligible(tx) {
+            if (!tx || Number(tx.amount) >= 0) return isCreditRefund(tx);
+            if (tx.account !== 'checking') return true;
+            return Boolean(tx.includeInBudget) && isCheckingTransactionLinkedToCredit(tx);
+        }
+
         function calculateCycleMetrics(cycle) {
-            const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
+            const totalFixed = getFixedExpensesTotal();
             const plannedSavings = Math.round(state.savings || 0);
 
             const cycleSpending = state.transactions
                 .filter(t => isTransactionInCycle(t, cycle))
-                .filter(t => (Number(t.amount) < 0 && (t.account !== 'checking' || t.includeInBudget)) || isCreditRefund(t))
+                .filter(isTransactionBudgetEligible)
                 .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0);
 
             const additionalLeftover = state.income - totalFixed - plannedSavings - cycleSpending;
@@ -4180,11 +4196,11 @@
             const { daysLeft, weekendsLeft } = getDaysRemaining();
             setTextIfPresent('daysRemaining', `${getBudgetPeriod()} • ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} remaining`);
             
-            const totalFixed = Math.round(state.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0));
+            const totalFixed = getFixedExpensesTotal();
             const currentCycle = getCurrentCycleRange();
             const budgetTransactions = state.transactions
                 .filter((t) => isTransactionInCycle(t, currentCycle))
-                .filter(t => (Number(t.amount) < 0 && (t.account !== 'checking' || t.includeInBudget)) || isCreditRefund(t));
+                .filter(isTransactionBudgetEligible);
             const postedSpent = Math.round(budgetTransactions
                 .filter(t => !t.pending)
                 .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0));
@@ -4451,7 +4467,7 @@
                 </tr>`;
             } else {
                 tableEl.classList.remove('liability-details-table');
-                tableHead.innerHTML = '<tr><th>Holding</th><th>Value</th><th>Contributions</th><th>Weight</th></tr>';
+                tableHead.innerHTML = '<tr><th>Holding</th><th>Value</th><th>Weight</th></tr>';
                 const ytdPct = computePerformancePct(account, kind);
                 const holdings = (account.holdings && account.holdings.length)
                     ? account.holdings
@@ -4473,9 +4489,9 @@
                     const holdYtd = Number.isFinite(holdYtdRaw) ? holdYtdRaw : null;
                     const liveClass = holdLive === null ? 'neutral' : (holdLive < 0 ? 'negative' : 'positive');
                     const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
-                    const contributionValue = Number(account?.ytdContributed ?? account?.estimationMeta?.ytdContributed);
-                    const contributionDisplay = Number.isFinite(contributionValue) ? formatCurrency(contributionValue) : '--';
-                    const holdingLabel = h.symbol || h.name || '--';
+                    const holdingLabel = h.symbol && h.name
+                        ? `${h.symbol} · ${h.name}`
+                        : (h.symbol || h.name || '--');
                     return `<tr class="holding-main-row">
                         <td><span class="holding-symbol">${holdingLabel}</span></td>
                         <td class="holding-value-cell">
@@ -4487,7 +4503,6 @@
                                 </div>
                             </div>
                         </td>
-                        <td class="holding-contribution-cell">${contributionDisplay}</td>
                         <td>${holdWeight.toFixed(1)}%</td>
                     </tr>`;
                 }).join('');
@@ -4957,6 +4972,7 @@
                 currentAccountDetailsId = null;
                 currentAccountDetailsKind = null;
             }
+            if (modalId === 'reimbursableModal') currentReimbursableIndex = null;
         }
         function saveIncome() { const value = parseCurrencyInput(document.getElementById('incomeInput').value); if (value > 0) { state.income = value; updateUI(); closeModal('incomeModal'); } }
         function saveSavings() { const value = parseCurrencyInput(document.getElementById('savingsInput').value); if (value >= 0) { state.savings = value; updateUI(); closeModal('savingsModal'); } }
@@ -5019,6 +5035,7 @@
                     targetTx.linkedDeposit = null;
                     targetTx.linkedDepositId = linkedDepositTx?.id || linkedDepositKey;
                     targetTx.reimbursable = Math.min(maxReimbursable, depositAmount);
+                    if (linkedDepositTx && linkedDepositTx.account === 'checking') linkedDepositTx.includeInBudget = true;
                 } else {
                     const manualAmount = parseFloat(document.getElementById('reimbursableAmountInput').value) || 0;
                     targetTx.reimbursable = Math.min(maxReimbursable, Math.max(0, manualAmount));
@@ -5397,7 +5414,7 @@
         initBudgetDayWheel();
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.classList.remove('active');
+                if (e.target === modal) closeModal(modal.id);
             });
         });
     </script>

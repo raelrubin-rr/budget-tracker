@@ -88,26 +88,35 @@ function buildFallbackHoldingForAccount(account) {
 }
 
 
-function readPerformancePercent(...values) {
-  for (const value of values) {
-    const parsed = parseNumericValue(value);
-    if (Number.isFinite(parsed)) return Number(parsed.toFixed(1));
+function normalizePercentValue(value, treatAsRatio = false) {
+  const parsed = parseNumericValue(value);
+  if (!Number.isFinite(parsed)) return null;
+  const normalized = treatAsRatio && Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+  return Number(normalized.toFixed(1));
+}
+
+function readPerformancePercent(candidates = []) {
+  for (const candidate of candidates) {
+    const value = candidate && typeof candidate === 'object' ? candidate.value : candidate;
+    const treatAsRatio = Boolean(candidate && typeof candidate === 'object' && candidate.treatAsRatio);
+    const parsed = normalizePercentValue(value, treatAsRatio);
+    if (Number.isFinite(parsed)) return parsed;
   }
 
   return null;
 }
 
 function resolveHoldingYtdPerformance(holding = {}, security = {}) {
-  return readPerformancePercent(
-    holding.ytd_return,
-    holding.ytdReturn,
-    holding.ytd_performance_pct,
-    holding.ytdPerformancePct,
-    security.ytd_return,
-    security.ytdReturn,
-    security.ytd_performance_pct,
-    security.ytdPerformancePct,
-  );
+  return readPerformancePercent([
+    { value: holding.ytd_return, treatAsRatio: true },
+    { value: holding.ytdReturn, treatAsRatio: true },
+    { value: holding.ytd_performance_pct },
+    { value: holding.ytdPerformancePct },
+    { value: security.ytd_return, treatAsRatio: true },
+    { value: security.ytdReturn, treatAsRatio: true },
+    { value: security.ytd_performance_pct },
+    { value: security.ytdPerformancePct },
+  ]);
 }
 
 function buildLiabilityDetails(account, liabilityByAccountId = {}) {
@@ -449,9 +458,9 @@ module.exports = async (req, res) => {
             const security = securitiesById[holding.security_id] || {};
             const value = Math.abs(Number(holding.institution_value || 0));
             const costBasis = Number(holding.cost_basis || 0);
-            const institutionPrice = Number(holding.institution_price || 0);
+            const valueChange = value - costBasis;
             const livePct = costBasis > 0
-              ? Number((((institutionPrice - costBasis) / costBasis) * 100).toFixed(1))
+              ? Number(((valueChange / costBasis) * 100).toFixed(1))
               : null;
 
             return {
