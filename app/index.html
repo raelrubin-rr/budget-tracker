@@ -4201,16 +4201,22 @@
             const budgetTransactions = state.transactions
                 .filter((t) => isTransactionInCycle(t, currentCycle))
                 .filter(isTransactionBudgetEligible);
-            const postedSpent = Math.round(budgetTransactions
+            const postedSpentRaw = budgetTransactions
                 .filter(t => !t.pending)
-                .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0));
-            const pendingSpent = Math.round(budgetTransactions
+                .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0);
+            const pendingSpentRaw = budgetTransactions
                 .filter(t => t.pending)
-                .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0));
-            const variableSpent = postedSpent + pendingSpent;
-            const available = state.income - totalFixed - state.savings - variableSpent;
-            const budgetTotal = state.income - totalFixed - state.savings;
-            const percentUsed = budgetTotal > 0 ? (variableSpent / budgetTotal) * 100 : 0;
+                .reduce((sum, t) => sum + getTransactionBudgetImpact(t), 0);
+            const variableSpentRaw = postedSpentRaw + pendingSpentRaw;
+            const budgetTotalRaw = state.income - totalFixed - state.savings;
+            const availableRaw = budgetTotalRaw - variableSpentRaw;
+
+            const postedSpent = Math.round(postedSpentRaw);
+            const pendingSpent = Math.round(pendingSpentRaw);
+            const budgetTotal = Math.round(budgetTotalRaw);
+            const available = Math.round(availableRaw);
+            const variableSpent = budgetTotal - available;
+            const percentUsed = budgetTotalRaw > 0 ? (variableSpentRaw / budgetTotalRaw) * 100 : 0;
             
             setTextIfPresent('availableAmount', `$${Math.round(available).toLocaleString()}`);
             
@@ -4489,7 +4495,7 @@
                     const holdYtd = Number.isFinite(holdYtdRaw) ? holdYtdRaw : null;
                     const liveClass = holdLive === null ? 'neutral' : (holdLive < 0 ? 'negative' : 'positive');
                     const ytdClass = holdYtd === null ? 'neutral' : (holdYtd < 0 ? 'negative' : 'positive');
-                    const holdingLabel = h.name || h.symbol || '--';
+                    const holdingLabel = h.displayName || (h.symbol && h.name ? `${h.symbol} — ${h.name}` : (h.symbol || h.name || '--'));
                     return `<tr class="holding-main-row">
                         <td><span class="holding-symbol">${holdingLabel}</span></td>
                         <td class="holding-value-cell">
@@ -5296,7 +5302,10 @@
 
                     const data = await response.json();
                     if (!response.ok) {
-                        const detailsError = typeof data?.details === 'string' ? data.details : data?.details?.error_message;
+                        const detailsError =
+                            typeof data?.details === 'string'
+                                ? data.details
+                                : (data?.details?.error_message || data?.details?.display_message || data?.details?.error_code || data?.details?.message);
                         const errMsg = data?.error || detailsError || 'Unable to load transactions right now';
                         throw new Error(errMsg);
                     }

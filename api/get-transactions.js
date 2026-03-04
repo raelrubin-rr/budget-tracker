@@ -87,6 +87,15 @@ function buildFallbackHoldingForAccount(account) {
   }];
 }
 
+function buildHoldingDisplayName(security = {}, fallbackName = 'Holding') {
+  const ticker = String(security?.ticker_symbol || '').trim();
+  const name = String(security?.name || fallbackName || 'Holding').trim();
+  if (!ticker) return name;
+  if (!name) return ticker;
+  if (ticker.toLowerCase() === name.toLowerCase()) return ticker;
+  return `${ticker} — ${name}`;
+}
+
 
 function normalizePercentValue(value, treatAsRatio = false) {
   const parsed = parseNumericValue(value);
@@ -385,7 +394,16 @@ async function fetchTransactionsWithRetry(access_token, start_date, end_date) {
       if (unsupportedErrors.has(plaidErrorCode)) {
         return null;
       }
-      const shouldRetry = plaidErrorCode === 'PRODUCT_NOT_READY' || plaidErrorCode === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION';
+      if (plaidErrorCode === 'PRODUCT_NOT_READY') {
+        return {
+          data: {
+            transactions: [],
+            total_transactions: 0,
+          },
+        };
+      }
+
+      const shouldRetry = plaidErrorCode === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION';
 
       if (!shouldRetry || attempt === maxAttempts) {
         throw error;
@@ -465,7 +483,7 @@ module.exports = async (req, res) => {
         date: tx.authorized_date || tx.date,
         pending: tx.pending,
         account: accountType,
-        includeInBudget: accountType === 'checking' ? false : true,
+        includeInBudget: accountType === 'checking' ? normalizedAmount !== 0 : true,
         category: tx.category ? tx.category[0].toLowerCase() : 'other',
         merchant_name: tx.merchant_name,
         personal_finance_category: tx.personal_finance_category,
@@ -486,10 +504,13 @@ module.exports = async (req, res) => {
           ? accountHoldings.map((holding) => {
             const security = securitiesById[holding.security_id] || {};
             const value = Math.abs(Number(holding.institution_value || 0));
-            const costBasis = Number(holding.cost_basis || 0);
-            const valueChange = value - costBasis;
-            const computedLivePct = costBasis > 0
-              ? Number(((valueChange / costBasis) * 100).toFixed(1))
+            const quantity = Number(holding.quantity || 0);
+            const perShareCostBasis = Number(holding.cost_basis || 0);
+            const totalCostBasis = quantity > 0 && perShareCostBasis > 0
+              ? quantity * perShareCostBasis
+              : perShareCostBasis;
+            const computedLivePct = totalCostBasis > 0
+              ? Number((((value - totalCostBasis) / totalCostBasis) * 100).toFixed(1))
               : null;
             const livePct = readPerformancePercent([
               { value: holding.current_return, treatAsRatio: true },
@@ -506,8 +527,9 @@ module.exports = async (req, res) => {
             ]);
 
             return {
-              symbol: security.ticker_symbol || security.name || acc.subtype || 'HOLDING',
+              symbol: security.ticker_symbol || acc.subtype || 'HOLDING',
               name: security.name || holding.security_id || acc.name || 'Holding',
+              displayName: buildHoldingDisplayName(security, security.name || holding.security_id || acc.name || 'Holding'),
               value,
               weight: holdingsTotal > 0 ? Number(((value / holdingsTotal) * 100).toFixed(1)) : 0,
               livePct,
@@ -532,11 +554,21 @@ module.exports = async (req, res) => {
           acc.performanceYtd,
           hasAnyHoldingYtd ? weightedYtdPct : null,
         );
+        const weightedCurrentPct = mappedHoldings.length
+          ? mappedHoldings.reduce((sum, holding) => {
+            const pct = Number(holding?.livePct);
+            const weight = Number(holding?.weight);
+            if (!Number.isFinite(pct) || !Number.isFinite(weight) || weight <= 0) return sum;
+            return sum + ((pct * weight) / 100);
+          }, 0)
+          : null;
+        const hasAnyHoldingCurrent = mappedHoldings.some((holding) => Number.isFinite(Number(holding?.livePct)));
         const accountCurrentPct = readPerformancePercent(
           acc.current_performance_pct,
           acc.currentPerformancePct,
           acc.performance_current,
           acc.performanceCurrent,
+          hasAnyHoldingCurrent ? weightedCurrentPct : null,
         );
 
         return {
