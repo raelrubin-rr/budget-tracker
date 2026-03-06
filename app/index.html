@@ -4054,7 +4054,7 @@
         async function persistRemoteState() {
             if (isHydratingRemoteState || !remoteStateReady) return;
             try {
-                await fetch('/api/save-state', {
+                const response = await fetch('/api/save-state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -4063,7 +4063,20 @@
                         state: buildRemoteStatePayload(),
                     }),
                 });
+
+                if (!response.ok) {
+                    const errorPayload = await response.json().catch(() => ({}));
+                    remoteStateLoadFailed = true;
+                    setConnectionState('Sync unavailable');
+                    console.warn('Supabase sync save failed:', errorPayload?.error || response.statusText || 'Unknown error');
+                    return;
+                }
+
+                remoteStateLoadFailed = false;
+                if (plaidItems.length) setConnectionState(getConnectionLabel());
             } catch (error) {
+                remoteStateLoadFailed = true;
+                setConnectionState('Sync unavailable');
                 console.warn('Failed to persist state to Supabase:', error);
             }
         }
@@ -4087,6 +4100,7 @@
             try {
                 const authenticatedUser = String(localStorage.getItem('budgetTrackerUser') || sessionStorage.getItem('budgetTrackerUser') || '').trim().toLowerCase();
                 const currentProfileId = getProfileId();
+                const cycleId = getCurrentCycleId();
                 const legacyProfileId = authenticatedUser
                     ? String(localStorage.getItem('budgetLegacyProfileId') || '').trim()
                     : '';
@@ -4096,7 +4110,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         profileId: currentProfileId,
-                        cycleId: getCurrentCycleId(),
+                        cycleId,
                     }),
                 });
 
@@ -4107,33 +4121,55 @@
                 }
                 remoteStateReady = true;
                 remoteStateLoadFailed = false;
+                if (plaidItems.length) setConnectionState(getConnectionLabel());
                 const data = await response.json();
                 let remoteState = data?.state;
 
-                if (authenticatedUser && !data?.found && legacyProfileId && legacyProfileId !== currentProfileId) {
-                    const legacyResponse = await fetch('/api/load-state', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            profileId: legacyProfileId,
-                            cycleId: getCurrentCycleId(),
-                        }),
-                    });
+                if (authenticatedUser && !data?.found) {
+                    const migrationCandidates = [legacyProfileId];
 
-                    if (legacyResponse.ok) {
+                    if (authenticatedUser === 'rr') {
+                        migrationCandidates.push('user::r', 'user:r', 'r');
+                    }
+
+                    const dedupedCandidates = migrationCandidates
+                        .map(candidate => String(candidate || '').trim())
+                        .filter((candidate, idx, list) => candidate && candidate !== currentProfileId && list.indexOf(candidate) === idx);
+
+                    for (const candidateProfileId of dedupedCandidates) {
+                        const legacyResponse = await fetch('/api/load-state', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                profileId: candidateProfileId,
+                                cycleId,
+                            }),
+                        });
+
+                        if (!legacyResponse.ok) continue;
+
                         const legacyData = await legacyResponse.json();
-                        if (legacyData?.found && legacyData?.state) {
-                            remoteState = legacyData.state;
-                            await fetch('/api/save-state', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    profileId: currentProfileId,
-                                    cycleId: getCurrentCycleId(),
-                                    state: remoteState,
-                                }),
-                            });
+                        if (!legacyData?.found || !legacyData?.state) continue;
+
+                        remoteState = legacyData.state;
+                        localStorage.setItem('budgetLegacyProfileId', candidateProfileId);
+
+                        const migrateResponse = await fetch('/api/save-state', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                profileId: currentProfileId,
+                                cycleId,
+                                state: remoteState,
+                            }),
+                        });
+
+                        if (!migrateResponse.ok) {
+                            const migrateErrorPayload = await migrateResponse.json().catch(() => ({}));
+                            console.warn('Supabase migration save failed:', migrateErrorPayload?.error || migrateResponse.statusText || 'Unknown error');
                         }
+
+                        break;
                     }
                 }
 
