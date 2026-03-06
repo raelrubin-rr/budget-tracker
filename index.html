@@ -14,19 +14,31 @@
           <div class="home-login-link" aria-label="Raelyboy homepage">
             <h1 class="home-wordmark">raelyboy</h1>
             <button class="binary-skull" id="binary-skull-login" type="button" aria-label="Log in to Raelyboy">
-00111100 00111100
-01000010 01000010
-01100110 01100110
-01111110 01111110
-00111100 00111100
-00100100 00100100
+               0100100101
+             0010001100111
+           1011001100000110
+          001100110000001100
+         0100100011000010010
+         0100100011000010010
+         00    0000    00
+         10    1111    01
+         10     11     01
+          1      00      1
+           0100000000010
+            1001001101
+          10   1001   00
+         1000   001   111001
+        1001010  0001001
+        1101110   00   101101
+       1010011000010110011111
+       011000100001100111111
+        0011111000001110000
+          11   0000100   1
+        10000010101   001011100
+       0011101000      00110010
+        100001          110010
+         1000            0001
             </button>
-          </div>
-
-          <!-- Preserved for future reuse; intentionally hidden from homepage UI for now. -->
-          <div class="actions actions--legacy" aria-hidden="true">
-            <a class="btn" href="/login?mode=login">Sign In</a>
-            <a class="btn" href="/login?mode=register">Create Account</a>
           </div>
         </section>
       </div>
@@ -64,7 +76,7 @@
           const response = await fetch('/api/auth-login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'r', password: 'r' }),
+            body: JSON.stringify({ username: 'rr', password: 'r' }),
           });
 
           const data = await response.json();

@@ -2,7 +2,8 @@ const { parseJsonBody, setCommonHeaders } = require('./_utils');
 const { APP_USERS_TABLE, createSupabaseAdminClient } = require('./_supabase');
 const { normalizeIdentity, verifyPassword } = require('./_auth');
 
-const PRIMARY_USERNAME = 'r';
+const PRIMARY_USERNAME = 'rr';
+const PRIMARY_USERNAME_ALIASES = new Set(['r', 'rr']);
 const PRIMARY_PASSWORD = 'r';
 const PRIMARY_USER = {
   id: 'primary-r-user',
@@ -28,7 +29,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'username and password are required' });
     }
 
-    if (usernameOrEmail === PRIMARY_USERNAME && password === PRIMARY_PASSWORD) {
+    if (PRIMARY_USERNAME_ALIASES.has(usernameOrEmail) && password === PRIMARY_PASSWORD) {
       return res.status(200).json({ ok: true, user: PRIMARY_USER });
     }
 
