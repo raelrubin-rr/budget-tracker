@@ -19,7 +19,7 @@
         <section class="card">
           <form id="login-form">
             <div class="form-row">
-              <label for="login-username">Username or Email</label>
+              <label for="login-username">Username</label>
               <input id="login-username" name="username" autocomplete="username" required />
             </div>
             <div class="form-row">
@@ -73,7 +73,7 @@
     (function () {
       const params = new URLSearchParams(window.location.search);
       const next = params.get('next') || '/app';
-      const requestedMode = params.get('mode') === 'register' ? 'register' : 'login';
+      const requestedMode = 'login';
       const loginForm = document.getElementById('login-form');
       const registerForm = document.getElementById('register-form');
       const staySignedInCheckbox = document.getElementById('stay-signed-in');
@@ -157,6 +157,7 @@
         }
       });
 
+      // Preserved for future enablement of account creation; currently hidden/disabled.
       registerForm.addEventListener('submit', async function (event) {
         event.preventDefault();
         error.textContent = '';
