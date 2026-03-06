@@ -2,6 +2,17 @@ const { parseJsonBody, setCommonHeaders } = require('./_utils');
 const { APP_USERS_TABLE, createSupabaseAdminClient } = require('./_supabase');
 const { normalizeIdentity, verifyPassword } = require('./_auth');
 
+const PRIMARY_USERNAME = 'r';
+const PRIMARY_PASSWORD = 'r';
+const PRIMARY_USER = {
+  id: 'primary-r-user',
+  username: PRIMARY_USERNAME,
+  email: '',
+  name: 'Raelyboy',
+  phone: '',
+};
+const ENABLE_DATABASE_LOGIN = false;
+
 module.exports = async (req, res) => {
   setCommonHeaders(res);
 
@@ -17,29 +28,36 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'username and password are required' });
     }
 
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from(APP_USERS_TABLE)
-      .select('id, username, email, name, phone, password_hash')
-      .or(`username.eq.${usernameOrEmail},email.eq.${usernameOrEmail}`)
-      .limit(1)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data || !verifyPassword(password, data.password_hash)) {
-      return res.status(401).json({ error: 'Invalid username/email or password' });
+    if (usernameOrEmail === PRIMARY_USERNAME && password === PRIMARY_PASSWORD) {
+      return res.status(200).json({ ok: true, user: PRIMARY_USER });
     }
 
-    return res.status(200).json({
-      ok: true,
-      user: {
-        id: data.id,
-        username: data.username,
-        email: data.email,
-        name: data.name,
-        phone: data.phone,
-      },
-    });
+    // Retained for future use if additional accounts are enabled again.
+    if (ENABLE_DATABASE_LOGIN) {
+      const supabase = createSupabaseAdminClient();
+      const { data, error } = await supabase
+        .from(APP_USERS_TABLE)
+        .select('id, username, email, name, phone, password_hash')
+        .or(`username.eq.${usernameOrEmail},email.eq.${usernameOrEmail}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data && verifyPassword(password, data.password_hash)) {
+        return res.status(200).json({
+          ok: true,
+          user: {
+            id: data.id,
+            username: data.username,
+            email: data.email,
+            name: data.name,
+            phone: data.phone,
+          },
+        });
+      }
+    }
+
+    return res.status(401).json({ error: 'Invalid username or password' });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to sign in', details: error.message || 'Unknown error' });
   }

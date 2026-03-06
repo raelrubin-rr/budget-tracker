@@ -2,11 +2,17 @@ const { parseJsonBody, setCommonHeaders } = require('./_utils');
 const { APP_USERS_TABLE, createSupabaseAdminClient } = require('./_supabase');
 const { hashPassword, normalizeIdentity } = require('./_auth');
 
+const ENABLE_SELF_REGISTRATION = false;
+
 module.exports = async (req, res) => {
   setCommonHeaders(res);
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  if (!ENABLE_SELF_REGISTRATION) {
+    return res.status(403).json({ error: 'Account creation is currently disabled.' });
+  }
 
   try {
     const body = parseJsonBody(req);

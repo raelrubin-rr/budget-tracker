@@ -11,36 +11,74 @@
     <main class="home-main">
       <div class="container">
         <section class="home-card">
-          <h2>Raelyboy</h2>
-          <div class="home-copy">
-            <p>
-              This app is a private, personal use only, budget tracker for reviewing account balances,
-              spending activity, and month-to-date progress in one place.
-            </p>
-            <p>
-              You can connect supported financial institutions through Plaid, including institutions
-              that use OAuth-style authentication.
-            </p>
-            <p>
-              Bank and transaction data is encrypted in storage and transit, and your data is never sold.
-            </p>
+          <div class="home-login-link" aria-label="Raelyboy homepage">
+            <h1 class="home-wordmark">raelyboy</h1>
+            <button class="binary-skull" id="binary-skull-login" type="button" aria-label="Log in to Raelyboy">
+00111100 00111100
+01000010 01000010
+01100110 01100110
+01111110 01111110
+00111100 00111100
+00100100 00100100
+            </button>
           </div>
 
-          <div class="actions">
+          <!-- Preserved for future reuse; intentionally hidden from homepage UI for now. -->
+          <div class="actions actions--legacy" aria-hidden="true">
             <a class="btn" href="/login?mode=login">Sign In</a>
             <a class="btn" href="/login?mode=register">Create Account</a>
-            <a class="btn secondary" href="/privacy">Privacy Policy</a>
-            <a class="btn secondary" href="/terms">Terms</a>
           </div>
         </section>
       </div>
     </main>
 
-    <footer class="footer">
-      <div class="container">
-        Contact: <a href="mailto:rael.rubin@me.com">rael.rubin@me.com</a>
-      </div>
+    <footer class="footer footer--home-links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms</a>
     </footer>
   </div>
+
+  <script>
+    (function () {
+      const skullButton = document.getElementById('binary-skull-login');
+
+      function clearSessionState() {
+        localStorage.removeItem('budgetTrackerAuth');
+        localStorage.removeItem('budgetTrackerUser');
+        localStorage.removeItem('budgetTrackerUserId');
+        sessionStorage.removeItem('budgetTrackerAuth');
+        sessionStorage.removeItem('budgetTrackerUser');
+        sessionStorage.removeItem('budgetTrackerUserId');
+      }
+
+      function setSession(user) {
+        clearSessionState();
+        localStorage.setItem('budgetTrackerAuth', 'authenticated');
+        localStorage.setItem('budgetTrackerUser', String(user.username || '').toLowerCase());
+        localStorage.setItem('budgetTrackerUserId', String(user.id || '').trim());
+      }
+
+      skullButton?.addEventListener('click', async function () {
+        skullButton.disabled = true;
+        try {
+          const response = await fetch('/api/auth-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'r', password: 'r' }),
+          });
+
+          const data = await response.json();
+          if (!response.ok || !data?.user) throw new Error(data?.error || 'Unable to sign in.');
+
+          setSession(data.user);
+          window.location.replace('/app');
+        } catch (error) {
+          console.error(error);
+          skullButton.disabled = false;
+          window.location.replace('/login?mode=login');
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
